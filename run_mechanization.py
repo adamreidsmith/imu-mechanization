@@ -4,6 +4,7 @@ from math import pi
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 
 from mechanization import INSMechanization
 from mechanization_pure import INSMechanization as PureINSMechanization
@@ -35,6 +36,8 @@ def main():
     long = -114.13371127 * pi / 180  # rad
     h = 1118.502  # m
 
+    alignment_time = 300  # s
+
     # Instantiate the model
     INS = INSMechanization(
         h,
@@ -42,42 +45,26 @@ def main():
         long,
         acc_bias,
         gyro_bias,
-        accel_sf=scale_factor,
-        gyro_sf=scale_factor,
-        accel_no=nonorthogonality,
-        gyro_no=nonorthogonality,
-        alignment_time=300,
+        scale_factor,
+        scale_factor,
+        nonorthogonality,
+        nonorthogonality,
+        vrw,
+        arw,
+        acc_corr_time,
+        gyro_corr_time,
+        acc_bias_instability,
+        gyro_bias_instability,
+        alignment_time,
     )
 
-    # Instantiate the model written in pure python
-    INSPure = PureINSMechanization(
-        h,
-        lat,
-        long,
-        acc_bias,
-        gyro_bias,
-        accel_sf=scale_factor,
-        gyro_sf=scale_factor,
-        accel_no=nonorthogonality,
-        gyro_no=nonorthogonality,
-        alignment_time=300,
-    )
-
-    # # Compute results
-    # results = []
-    # t0 = time.perf_counter()
-    # for i, measurement in enumerate(data):
-    #     INS.process_measurement(measurement)
-    #     results.append(INS.get_params())
-    # print(f'Mechanization completed in {time.perf_counter() - t0:.3f} seconds')
-
-    data = data.tolist()
-
+    if isinstance(INS, PureINSMechanization):
+        data = data.tolist()
     results = []
     t0 = time.perf_counter()
     for i, measurement in enumerate(data):
-        INSPure.process_measurement(measurement)
-        results.append(INSPure.get_params())
+        INS.process_measurement(measurement)
+        results.append(INS.get_params())
     print(f'Pure mechanization completed in {time.perf_counter() - t0:.3f} seconds')
 
     # Save the results in csv format
@@ -106,9 +93,14 @@ def main():
     plt.figure(figsize=(15, 10.5))
     for i in range(9):
         plt.subplot(3, 3, i + 1)
-        sns.lineplot(x=timestamps, y=results[:, i], label=labels[i + 1])
+        ax = sns.lineplot(x=timestamps, y=results[:, i], label=labels[i + 1])
         plt.xlabel('time (min)')
         plt.ylabel(units[i])
+        plt.title(labels[i + 1].title())
+
+        # format the y-axis tick labels to remove the constant
+        formatter = ScalarFormatter(useOffset=False, useMathText=True)
+        ax.yaxis.set_major_formatter(formatter)
     plt.tight_layout()
     plt.show()
 

@@ -1,5 +1,6 @@
 from math import sqrt, sin, cos, tan, asin, atan, pi
 import numpy as np
+from typing import Callable
 
 RAD_TO_DEG = 180 / pi
 
@@ -15,31 +16,46 @@ class INSMechanization:
 
     def __init__(
         self,
-        h0,  # initial height
-        lat0,  # initial latitude
-        long0,  # initial longitude
-        accel_bias=0,  # accel bias
-        gyro_bias=0,  # gyro bias
-        accel_sf=0,  # accel scale factor matrix
-        gyro_sf=0,  # gyro scale factor matrix
-        accel_no=0,  # accel non-orthogonality
-        gyro_no=0,  # gyro non-orthogonality
-        alignment_time=300,  # alignment time in seconds
-    ):
+        h0: float,  # initial height
+        lat0: float,  # initial latitude
+        long0: float,  # initial longitude
+        accel_bias: float | Callable = 0.0,  # accel bias
+        gyro_bias: float = 0.0,  # gyro bias
+        accel_sf: float | np.ndarray = 0.0,  # accel scale factor matrix
+        gyro_sf: float | np.ndarray = 0.0,  # gyro scale factor matrix
+        accel_no: np.ndarray = np.zeros((3, 3)),  # accel non-orthogonality
+        gyro_no: np.ndarray = np.zeros((3, 3)),  # gyro non-orthogonality
+        vrw: float = 0.0,  # velocity random walk
+        arw: float = 0.0,  # angle random walk
+        accel_corr_time: float = 0.0,  # accel correlation time
+        gyro_corr_time: float = 0.0,  # gyro correlation time
+        accel_bias_instability: float | Callable = 0.0,  # accel bias instability
+        gyro_bias_instability: float = 0.0,  # gyro bias instability
+        alignment_time: float = 0,  # alignment time in seconds
+    ) -> None:
         self.h = h0
         self.lat = lat0
         self.long = long0
         self.accel_bias = accel_bias
         self.gyro_bias = gyro_bias
+        self.arw = arw
+        self.vrw = vrw
+        self.accel_corr_time = accel_corr_time
+        self.gyro_corr_time = gyro_corr_time
+        self.accel_bias_instability = accel_bias_instability
+        self.gyro_bias_instability = gyro_bias_instability
+        accel_sf = accel_sf * np.eye(3) if isinstance(accel_sf, (float, int)) else accel_sf
+        gyro_sf = gyro_sf * np.eye(3) if isinstance(gyro_sf, (float, int)) else gyro_sf
         self.accel_inv_error_matrix = np.linalg.inv(np.eye(3) + accel_sf + accel_no)
         self.gyro_inv_error_matrix = np.linalg.inv(np.eye(3) + gyro_sf + gyro_no)
-        self.quat = None  # rotation quaternion; inititalized when self.align is called
-        self.R_b2l = None  # rotation matrix; inititalized when self.align is called
+        self.quat = None  # rotation quaternion; inititalized when alignment completes
+        self.R_b2l = None  # rotation matrix; inititalized when alignment completes
         self.v_llf = np.zeros((3, 1))  # initial ENU velocities
         self.prev_delta_v_llf = np.zeros((3, 1))  # change in v in LLF at previous t
-        self.prev_time = 0  # previous time, used to determine delta_t
+        self.prev_time = None  # previous time, used to determine delta_t
         self.roll = self.pitch = self.azimuth = 0  # initialize to store orientation
         self.timestamp = 0  # store the current timestamp
+        self.start_time = None  # start time of the mechanization
 
         # Alignment specific attributes
         self.alignment_time = alignment_time
@@ -47,6 +63,14 @@ class INSMechanization:
         self.alignment_acc_mean = np.zeros((3, 1))  # running mean for accel alignment
         self.alignment_omega_mean = np.zeros((3, 1))  # running mean for gyro alignment
         self.alignment_it = 0  # couter to keep track of alignment iterations
+        self.post_alignment_roll_error = -1  # roll error after alignment
+        self.post_alignment_pitch_error = -1  # pitch error after alignment
+        self.post_alignment_azimuth_error = -1  # azimuth error after alignment
+
+        # Errors
+        self.roll_error = 0
+        self.pitch_error = 0
+        self.azimuth_error = 0
 
     @staticmethod
     def get_rotation_matrix(roll, pitch, azimuth):
@@ -79,14 +103,14 @@ class INSMechanization:
         )
 
     @staticmethod
-    def matrix_to_quaternion(R):
+    def matrix_to_normalized_quaternion(R):
         '''Convert a rotation matrix to a normalized quaternion'''
 
         q4 = sqrt(1 + R[0, 0] + R[1, 1] + R[2, 2]) / 2
-        four_q4_inv = 1 / (4 * q4)
-        q1 = (R[2, 1] - R[1, 2]) * four_q4_inv
-        q2 = (R[0, 2] - R[2, 0]) * four_q4_inv
-        q3 = (R[1, 0] - R[0, 1]) * four_q4_inv
+        four_q4 = 4 * q4
+        q1 = (R[2, 1] - R[1, 2]) / four_q4
+        q2 = (R[0, 2] - R[2, 0]) / four_q4
+        q3 = (R[1, 0] - R[0, 1]) / four_q4
         q_norm = sqrt(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4)
         return np.array([[q1 / q_norm], [q2 / q_norm], [q3 / q_norm], [q4 / q_norm]])
 
@@ -186,31 +210,39 @@ class INSMechanization:
             self.alignment_omega_mean /= self.alignment_it
 
             # Compute gravity
-            g_inv = 1 / self.gravity(self.lat, self.h)
+            g = self.gravity(self.lat, self.h)
 
             # Compute roll, pitch, and azimuth based on means of measurements during static alignment
-            self.roll = -np.sign(self.alignment_acc_mean[2, 0]) * asin(self.alignment_acc_mean[0, 0] * g_inv)
-            self.pitch = np.sign(self.alignment_acc_mean[2, 0]) * asin(self.alignment_acc_mean[1, 0] * g_inv)
+            self.roll = -np.sign(self.alignment_acc_mean[2, 0]) * asin(self.alignment_acc_mean[0, 0] / g)
+            self.pitch = np.sign(self.alignment_acc_mean[2, 0]) * asin(self.alignment_acc_mean[1, 0] / g)
             self.azimuth = atan(-self.alignment_omega_mean[0, 0] / self.alignment_omega_mean[1, 0])
 
             # Compute rotation matrix and the associated quaternion
             R_b2l = self.get_rotation_matrix(self.roll, self.pitch, self.azimuth)
-            self.quat = self.matrix_to_quaternion(R_b2l)
+            self.quat = self.matrix_to_normalized_quaternion(R_b2l)
             self.R_b2l = self.quaternion_to_matrix(self.quat)
 
-            # flag alignment as complete
+            # Compute attitude errors after alignment
+            accel_bias = self.accel_bias(g) if callable(self.accel_bias) else self.accel_bias
+            self.post_alignment_roll_error = self.post_alignment_pitch_error = accel_bias / g
+            omega_e_cos_phi = self.omega_e * cos(self.lat)
+            self.post_alignment_azimuth_error = self.gyro_bias / omega_e_cos_phi + self.arw / (
+                omega_e_cos_phi * sqrt(self.alignment_time)
+            )
+
+            # Flag alignment as complete
             self.alignment_complete = True
 
     def angular_velocity_compensation(self, N, M, omega, delta_t):
         '''Compensate for the LLF transportation rate and the Earth's rotation'''
 
         # Compute the rotation between the inertial frame and LLF as seen in the body frame
-        N_plus_h_inv = 1 / (N + self.h)
+        N_plus_h = N + self.h
         omega_lib = self.R_b2l.T @ np.array(
             [
                 [-self.v_llf[1, 0] / (M + self.h)],
-                [self.v_llf[0, 0] * N_plus_h_inv + self.omega_e * cos(self.lat)],
-                [self.v_llf[0, 0] * tan(self.lat) * N_plus_h_inv + self.omega_e * sin(self.lat)],
+                [self.v_llf[0, 0] / N_plus_h + self.omega_e * cos(self.lat)],
+                [self.v_llf[0, 0] * tan(self.lat) / N_plus_h + self.omega_e * sin(self.lat)],
             ]
         )
 
@@ -252,12 +284,12 @@ class INSMechanization:
         acc_llf = self.R_b2l @ acc
 
         # Compute omega_lel in skew-symmetric form
-        N_plus_h_inv = 1 / (N + self.h)
+        N_plus_h = N + self.h
         omega_lel = np.array(
             [
                 -self.v_llf[1, 0] / (M + self.h),
-                self.v_llf[0, 0] * N_plus_h_inv,
-                self.v_llf[0, 0] * tan(self.lat) * N_plus_h_inv,
+                self.v_llf[0, 0] / N_plus_h,
+                self.v_llf[0, 0] * tan(self.lat) / N_plus_h,
             ]
         )
         Omega_lel = self.vec_to_skew(omega_lel)
@@ -285,14 +317,44 @@ class INSMechanization:
         # Save the new LLF velocity
         self.v_llf = new_v_llf
 
+    def update_errors(self):
+        '''
+        BING CHAT:
+
+        The error that has accumulated in attitude in time t due to the correlation time of a gyroscope
+        can be calculated using the following equation:
+
+        Error in attitude = (correlation time of gyroscope) * (angular rate of rotation) * sqrt(3t)
+
+        where angular rate of rotation is the rate at which the gyroscope is rotating and t is the time
+        for which the gyroscope has been used. This equation assumes that the gyroscope has a constant
+        bias error. However, in reality, the bias error of a gyroscope is not constant and varies with
+        time. Therefore, this equation provides only an approximate estimate of attitude error.
+
+        The factor of sqrt(3t) comes from the fact that the error in attitude due to the correlation time
+        of a gyroscope is a random walk process. The error grows with time and the rate of growth is
+        proportional to the square root of time. The factor of sqrt(3) comes from the fact that the error
+        in attitude due to a random walk process is proportional to the square root of the number of
+        dimensions.
+        '''
+
+        if not self.alignment_complete:
+            return
+        return
+
+        self.roll_error = self.post_alignment_roll_error + ...
+
     def process_measurement(self, measurement):
         '''Process a measurement from the IMU'''
 
-        self.timestamp = measurement[0]
+        # In case we get a non-zero start time, shift the time steps back to the time since the first measurment
+        if self.start_time is None:
+            self.start_time = measurement[0]
+        self.timestamp = measurement[0] - self.start_time
         omega = measurement[1:4].reshape((3, 1))
         acc = measurement[4:].reshape((3, 1))
 
-        delta_t = self.timestamp - self.prev_time
+        delta_t = self.timestamp - self.prev_time if self.prev_time is not None else 0
         self.prev_time = self.timestamp
 
         # If alignment is not complete, call align
@@ -313,6 +375,9 @@ class INSMechanization:
         # Integrate to update position and LLF velocity
         self.v_and_r_integration(acc, delta_t, g, N, M)
 
+        # Update errors
+        self.update_errors()
+
     def get_params(self, get_labels=False, degrees=True):
         '''
         Return the current navigation parameters
@@ -326,9 +391,9 @@ class INSMechanization:
                 'latitude',
                 'longitude',
                 'height',
-                'velocityEast',
-                'velocityNorth',
-                'velocityUp',
+                'velocity east',
+                'velocity north',
+                'velocity up',
                 'roll',
                 'pitch',
                 'azimuth',

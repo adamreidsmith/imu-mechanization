@@ -1,5 +1,6 @@
 from math import copysign, sqrt, sin, cos, tan, asin, atan, pi
 
+
 RAD_TO_DEG = 180 / pi
 
 
@@ -7,6 +8,10 @@ RAD_TO_DEG = 180 / pi
 
 
 class INSMechanization:
+    '''
+    Class to compute mechanization of IMU data.
+    All values must be in SI base units or SI derived units.
+    '''
 
     e_squared = 6.69438e-3  # squared WGS84 eccentricity of the Earth
     semimajor_axis = 6378137  # WGS84 semi-major axis of the Earth (m)
@@ -24,13 +29,25 @@ class INSMechanization:
         gyro_sf=((0, 0, 0), (0, 0, 0), (0, 0, 0)),  # gyro scale factor matrix
         accel_no=((0, 0, 0), (0, 0, 0), (0, 0, 0)),  # accel non-orthogonality
         gyro_no=((0, 0, 0), (0, 0, 0), (0, 0, 0)),  # gyro non-orthogonality
-        alignment_time=300,  # alignment time in seconds
+        vrw=0,  # velocity random walk
+        arw=0,  # angle random walk
+        accel_corr_time=0,  # accel correlation time
+        gyro_corr_time=0,  # gyro correlation time
+        accel_bias_instability=0,  # accel bias instability
+        gyro_bias_instability=0,  # gyro bias instability
+        alignment_time=0,  # alignment time in seconds
     ):
         self.h = h0
         self.lat = lat0
         self.long = long0
         self.accel_bias = accel_bias
         self.gyro_bias = gyro_bias
+        self.arw = arw
+        self.vrw = vrw
+        self.accel_corr_time = accel_corr_time
+        self.gyro_corr_time = gyro_corr_time
+        self.accel_bias_instability = accel_bias_instability
+        self.gyro_bias_instability = gyro_bias_instability
         self.accel_inv_error_matrix = self.matinv(self.matsum(self.matsum(self.i3, accel_sf), accel_no))
         self.gyro_inv_error_matrix = self.matinv(self.matsum(self.matsum(self.i3, gyro_sf), gyro_no))
         self.quat = None  # rotation quaternion; inititalized when self.align is called
@@ -47,6 +64,14 @@ class INSMechanization:
         self.alignment_acc_mean = [0, 0, 0]  # running mean for accel alignment
         self.alignment_omega_mean = [0, 0, 0]  # running mean for gyro alignment
         self.alignment_it = 0  # couter to keep track of alignment iterations
+        self.post_alignment_roll_error = -1  # roll error after alignment
+        self.post_alignment_pitch_error = -1  # pitch error after alignment
+        self.post_alignment_azimuth_error = -1  # azimuth error after alignment
+
+        # Errors
+        self.roll_error = 0
+        self.pitch_error = 0
+        self.azimuth_error = 0
 
     @staticmethod
     def matinv(m):
@@ -140,10 +165,10 @@ class INSMechanization:
         '''Convert a rotation matrix to a normalized quaternion'''
 
         q4 = sqrt(1 + R[0][0] + R[1][1] + R[2][2]) / 2
-        four_q4_inv = 1 / (4 * q4)
-        q1 = (R[2][1] - R[1][2]) * four_q4_inv
-        q2 = (R[0][2] - R[2][0]) * four_q4_inv
-        q3 = (R[1][0] - R[0][1]) * four_q4_inv
+        four_q4 = 4 * q4
+        q1 = (R[2][1] - R[1][2]) / four_q4
+        q2 = (R[0][2] - R[2][0]) / four_q4
+        q3 = (R[1][0] - R[0][1]) / four_q4
         q_norm = sqrt(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4)
         return [q1 / q_norm, q2 / q_norm, q3 / q_norm, q4 / q_norm]
 
@@ -251,11 +276,11 @@ class INSMechanization:
             self.alignment_omega_mean[2] /= self.alignment_it
 
             # Compute gravity
-            g_inv = 1 / self.gravity(self.lat, self.h)
+            g = self.gravity(self.lat, self.h)
 
             # Compute roll, pitch, and azimuth based on means of measurements during static alignment
-            self.roll = -copysign(1, self.alignment_acc_mean[2]) * asin(self.alignment_acc_mean[0] * g_inv)
-            self.pitch = copysign(1, self.alignment_acc_mean[2]) * asin(self.alignment_acc_mean[1] * g_inv)
+            self.roll = -copysign(1, self.alignment_acc_mean[2]) * asin(self.alignment_acc_mean[0] / g)
+            self.pitch = copysign(1, self.alignment_acc_mean[2]) * asin(self.alignment_acc_mean[1] / g)
             self.azimuth = atan(-self.alignment_omega_mean[0] / self.alignment_omega_mean[1])
 
             # Compute rotation matrix and the associated quaternion
@@ -263,21 +288,29 @@ class INSMechanization:
             self.quat = self.matrix_to_quaternion(R_b2l)
             self.R_b2l = self.quaternion_to_matrix(self.quat)
 
-            # flag alignment as complete
+            # Compute attitude errors after alignment
+            accel_bias = self.accel_bias(g) if callable(self.accel_bias) else self.accel_bias
+            self.post_alignment_roll_error = self.post_alignment_pitch_error = accel_bias / g
+            omega_e_cos_phi = self.omega_e * cos(self.lat)
+            self.post_alignment_azimuth_error = self.gyro_bias / omega_e_cos_phi + self.arw / (
+                omega_e_cos_phi * sqrt(self.alignment_time)
+            )
+
+            # Flag alignment as complete
             self.alignment_complete = True
 
     def angular_velocity_compensation(self, N, M, omega, delta_t):
         '''Compensate for the LLF transportation rate and the Earth's rotation'''
 
         # Compute the rotation between the inertial frame and LLF as seen in the body frame
-        N_plus_h_inv = 1 / (N + self.h)
+        N_plus_h = N + self.h
         R_b2lT = self.T3(self.R_b2l)
         omega_lib = self.matvec(
             R_b2lT,
             [
                 -self.v_llf[1] / (M + self.h),
-                self.v_llf[0] * N_plus_h_inv + self.omega_e * cos(self.lat),
-                self.v_llf[0] * tan(self.lat) * N_plus_h_inv + self.omega_e * sin(self.lat),
+                self.v_llf[0] / N_plus_h + self.omega_e * cos(self.lat),
+                self.v_llf[0] * tan(self.lat) / N_plus_h + self.omega_e * sin(self.lat),
             ],
         )
 
@@ -322,11 +355,11 @@ class INSMechanization:
         acc_llf = self.matvec(self.R_b2l, acc)
 
         # Compute omega_lel in skew-symmetric form
-        N_plus_h_inv = 1 / (N + self.h)
+        N_plus_h = N + self.h
         omega_lel = [
             -self.v_llf[1] / (M + self.h),
-            self.v_llf[0] * N_plus_h_inv,
-            self.v_llf[0] * tan(self.lat) * N_plus_h_inv,
+            self.v_llf[0] / N_plus_h,
+            self.v_llf[0] * tan(self.lat) / N_plus_h,
         ]
         Omega_lel = self.vec_to_skew(omega_lel)
 
@@ -420,9 +453,9 @@ class INSMechanization:
                 'latitude',
                 'longitude',
                 'height',
-                'velocityEast',
-                'velocityNorth',
-                'velocityUp',
+                'velocity east',
+                'velocity north',
+                'velocity up',
                 'roll',
                 'pitch',
                 'azimuth',
