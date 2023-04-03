@@ -166,22 +166,33 @@ $$\lambda_t=\lambda_{t-1}+\frac12\left(\frac{V^e_{t-1}+V^e_t}{(N+h)\cos\phi}\rig
 and
 $$\phi_t=\phi_{t-1}+\frac12\left(\frac{V^n_{t-1}+V^n_t}{M+h}\right)\Delta t$$
 and the updated altitude is given by
-$$h_t=h_{t-1}+\frac12\left(V^u_{t-1}+V^u_t\right).$$
+$$h_t=h_{t-1}+\frac12\left(V^u_{t-1}+V^u_t\right)\Delta t.$$
 
 \subsection{Summary of mechanization implementation}
 The steps to mechanization with the \pyth{INSMechanization} class can be summarized as follows:
 \begin{enumerate}
 	\item Instantiate an instance of the \pyth{INSMechanization} class, passing in the initial position, error parameters, and alignment time.
 	\item Call the \pyth{process_measurement} method with each IMU update, passing in the timestamp and accelerometer and gyroscope measurements.  This method functions as follows:
-	\begin{enumerate}[i]
-		\item this
+	\begin{enumerate}[i.]
+		\item Call the \pyth{compensate_errors_and_compute_params} method to correct for deterministic errors in the accelerometer and gyroscope measurements and compute Earth parameters at the current latitude.
+		\item If alignment is not complete, call the \pyth{align} method and return. This keeps track of the mean acceleration and rotation rate. On the last iteration during the alignment time, the rotation of the body w.r.t. the LLF is computed and \pyth{align} is no longer called.
+		\item Compensate the angular velocity measurement for the rotation of the Earth and the movement of the LLF and compute the angular changes of the body.  This is performed by the \pyth{angular_velocity_compensation} method.
+		\item Update the rotation matrix and quaternion describing the rotation of the body w.r.t. the LLF, and compute the updated roll, pitch, and azimuth with the \pyth{attitude_integration} method.
+		\item Call \pyth{v_and_r_integration} to compensate the acceleration for the Coriolis effect and the acceleration due to gravity, and update the velocity and position of the LLF.
 	\end{enumerate}
 	\item Obtain navigation parameters at any time by calling the \pyth{get_params} method.
 \end{enumerate}
 
-
-
-
+\subsection{Accessory methods}
+Several other methods are provided in the \pyth{INSMechanization} class to facilitate computation.  They are described as follows:
+\begin{itemize}
+	\item \pyth{@staticmethod gravity(lat, h)} | Returns the gravitational field strength in m/s$^2$ given the latitude in radians and the height above the ellipsoid in meters.
+	\item \pyth{@classmethod radii_of_curvature(cls, lat)} | Returns the radii of curvature of the Earth in the prime vertical $N$ and meridian $M$ directions given the latitude in radians.
+	\item \pyth{@staticmethod vec_to_skew(v)} | Returns the skew-symmetric representation of a the input vector as a numpy ndarray.
+	\item \pyth{@staticmethod get_rotation_matrix(r, p, A)} | Returns the rotation matrix of the body w.r.t. the LLF as a numpy ndarray given roll, pitch, and azimuth in radians.
+	\item \pyth{@staticmethod matrix_to_normalized_quaternion(R)} | Converts a $3\times3$ rotation matrix into a normalized quaternion and returns it as a numpy array.
+	\item \pyth{@staticmethod quaternion_to_matrix(q)} | Converts a normalized quaternion into a rotation matrix and returns it as a numpy array.
+\end{itemize}
 
 
 

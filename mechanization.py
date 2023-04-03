@@ -73,15 +73,15 @@ class INSMechanization:
         self.azimuth_error = 0
 
     @staticmethod
-    def get_rotation_matrix(roll, pitch, azimuth):
+    def get_rotation_matrix(r, p, A):
         '''Compute the rotation matrix to rotate the body frame to the LLF from the Euler angles'''
 
-        cosr = cos(roll)
-        cosp = cos(pitch)
-        cosa = cos(azimuth)
-        sinr = sin(roll)
-        sinp = sin(pitch)
-        sina = sin(azimuth)
+        cosr = cos(r)
+        cosp = cos(p)
+        cosa = cos(A)
+        sinr = sin(r)
+        sinp = sin(p)
+        sina = sin(A)
         cosacosr = cosa * cosr
         sinasinr = sina * sinr
         sinacosr = sina * cosr
