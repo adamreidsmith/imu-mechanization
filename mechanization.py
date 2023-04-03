@@ -280,9 +280,6 @@ class INSMechanization:
     def v_and_r_integration(self, acc, delta_t, g, N, M):
         '''Compute the velocity increments and update the LLF velocity and the position'''
 
-        # Rotate acceleration to the LLF
-        acc_llf = self.R_b2l @ acc
-
         # Compute omega_lel in skew-symmetric form
         N_plus_h = N + self.h
         omega_lel = np.array(
@@ -302,7 +299,7 @@ class INSMechanization:
         g_vec = np.array([[0], [0], [-g]])
 
         # Compute the change in velocity in the LLF
-        delta_v_llf = (acc_llf - (2 * Omega_eil + Omega_lel) @ self.v_llf + g_vec) * delta_t
+        delta_v_llf = (self.R_b2l @ acc - (2 * Omega_eil + Omega_lel) @ self.v_llf + g_vec) * delta_t
 
         # Update the LLF velocity
         new_v_llf = self.v_llf + 0.5 * (self.prev_delta_v_llf + delta_v_llf)
