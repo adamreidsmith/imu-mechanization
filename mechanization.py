@@ -63,14 +63,14 @@ class INSMechanization:
         self.alignment_acc_mean = np.zeros((3, 1))  # running mean for accel alignment
         self.alignment_omega_mean = np.zeros((3, 1))  # running mean for gyro alignment
         self.alignment_it = 0  # couter to keep track of alignment iterations
-        self.post_alignment_roll_error = -1  # roll error after alignment
-        self.post_alignment_pitch_error = -1  # pitch error after alignment
-        self.post_alignment_azimuth_error = -1  # azimuth error after alignment
+        self.post_alignment_roll_error = None  # roll error after alignment
+        self.post_alignment_pitch_error = None  # pitch error after alignment
+        self.post_alignment_azimuth_error = None  # azimuth error after alignment
 
         # Errors
-        self.roll_error = 0
-        self.pitch_error = 0
-        self.azimuth_error = 0
+        self.roll_error_sq = 0
+        self.pitch_error_sq = 0
+        self.azimuth_error_sq = 0
 
     @staticmethod
     def get_rotation_matrix(r, p, A):
@@ -314,7 +314,7 @@ class INSMechanization:
         # Save the new LLF velocity
         self.v_llf = new_v_llf
 
-    def update_errors(self):
+    def update_errors(self, delta_t, omega):
         '''
         BING CHAT:
 
@@ -337,9 +337,10 @@ class INSMechanization:
 
         if not self.alignment_complete:
             return
-        return
 
-        self.roll_error = self.post_alignment_roll_error + ...
+        # gct_sq = self.gyro_corr_time * self.gyro_corr_time
+        # self.roll_error_sq += gct_sq * omega**2 * 3 * delta_t
+        # self.roll_error_sq += gct_sq * omega**2 * 3 * delta_t
 
     def process_measurement(self, measurement):
         '''Process a measurement from the IMU'''
@@ -373,7 +374,7 @@ class INSMechanization:
         self.v_and_r_integration(acc, delta_t, g, N, M)
 
         # Update errors
-        self.update_errors()
+        self.update_errors(delta_t, omega)
 
     def get_params(self, get_labels=False, degrees=True):
         '''
@@ -419,3 +420,10 @@ class INSMechanization:
             self.azimuth,
             not self.alignment_complete,
         )
+
+    # def get_errors(self):
+    #     return (
+    #         self.post_alignment_roll_error + sqrt(self.roll_error_sq),
+    #         self.post_alignment_pitch_error + sqrt(self.pitch_error_sq),
+    #         self.post_alignment_azimuth_error + sqrt(self.azimuth_error_sq),
+    #     )
