@@ -9,6 +9,10 @@ RAD_TO_DEG = 180 / pi
 
 
 class INSMechanization:
+    '''
+    Class to compute mechanization of IMU data.
+    All values must be in SI base units or SI derived units.
+    '''
 
     e_squared = 6.69438e-3  # squared WGS84 eccentricity of the Earth
     semimajor_axis = 6378137  # WGS84 semi-major axis of the Earth (m)
@@ -52,7 +56,7 @@ class INSMechanization:
         self.R_b2l = None  # rotation matrix; inititalized when alignment completes
         self.v_llf = np.zeros((3, 1))  # initial ENU velocities
         self.prev_delta_v_llf = np.zeros((3, 1))  # change in v in LLF at previous t
-        self.prev_time = None  # previous time, used to determine delta_t
+        self.prev_time = 0  # previous time, used to determine delta_t
         self.roll = self.pitch = self.azimuth = 0  # initialize to store orientation
         self.timestamp = 0  # store the current timestamp
         self.start_time = None  # start time of the mechanization
@@ -274,7 +278,7 @@ class INSMechanization:
 
         # Compute roll, pitch, and azimuth from the rotation matrix
         self.roll = atan(-self.R_b2l[2, 0] / self.R_b2l[2, 2])
-        self.pitch = atan(self.R_b2l[2, 1] / np.sqrt(self.R_b2l[0, 1] ** 2 + self.R_b2l[1, 1] ** 2))
+        self.pitch = atan(self.R_b2l[2, 1] / sqrt(self.R_b2l[0, 1] ** 2 + self.R_b2l[1, 1] ** 2))
         self.azimuth = atan(self.R_b2l[0, 1] / self.R_b2l[1, 1])
 
     def v_and_r_integration(self, acc, delta_t, g, N, M):
@@ -352,7 +356,7 @@ class INSMechanization:
         omega = measurement[1:4].reshape((3, 1))
         acc = measurement[4:].reshape((3, 1))
 
-        delta_t = self.timestamp - self.prev_time if self.prev_time is not None else 0
+        delta_t = self.timestamp - self.prev_time
         self.prev_time = self.timestamp
 
         # If alignment is not complete, call align
@@ -373,7 +377,7 @@ class INSMechanization:
         # Integrate to update position and LLF velocity
         self.v_and_r_integration(acc, delta_t, g, N, M)
 
-        # Update errors
+        # Update errors ################################ DON'T KNOW WHAT TO DO HERE ################################
         self.update_errors(delta_t, omega)
 
     def get_params(self, get_labels=False, degrees=True):
@@ -414,7 +418,7 @@ class INSMechanization:
             self.lat,
             self.long,
             self.h,
-            *self.v_llf,
+            *self.v_llf.reshape(3),
             self.roll,
             self.pitch,
             self.azimuth,

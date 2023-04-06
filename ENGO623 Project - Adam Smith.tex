@@ -174,7 +174,7 @@ The steps to mechanization with the \pyth{INSMechanization} class can be summari
 	\item Instantiate an instance of the \pyth{INSMechanization} class, passing in the initial position, error parameters, and alignment time.
 	\item Call the \pyth{process_measurement} method with each IMU update, passing in the timestamp and accelerometer and gyroscope measurements.  This method functions as follows:
 	\begin{enumerate}[i.]
-		\item Call the \pyth{compensate_errors_and_compute_params} method to correct for deterministic errors in the accelerometer and gyroscope measurements and compute Earth parameters at the current latitude.
+		\item Call \pyth{compensate_errors_and_compute_params} to correct for deterministic errors in the accelerometer and gyroscope measurements and compute Earth parameters at the current latitude.
 		\item If alignment is not complete, call the \pyth{align} method and return. This keeps track of the mean acceleration and rotation rate. On the last iteration during the alignment time, the rotation of the body w.r.t. the LLF is computed and \pyth{align} is no longer called.
 		\item Compensate the angular velocity measurement for the rotation of the Earth and the movement of the LLF and compute the angular changes of the body.  This is performed by the \pyth{angular_velocity_compensation} method.
 		\item Update the rotation matrix and quaternion describing the rotation of the body w.r.t. the LLF, and compute the updated roll, pitch, and azimuth with the \pyth{attitude_integration} method.

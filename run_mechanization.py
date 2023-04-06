@@ -65,7 +65,7 @@ def main():
     for i, measurement in enumerate(data):
         INS.process_measurement(measurement)
         results.append(INS.get_params())
-    print(f'Pure mechanization completed in {time.perf_counter() - t0:.3f} seconds')
+    print(f'Mechanization completed in {time.perf_counter() - t0:.3f} seconds')
 
     # Save the results in csv format
     with open('results.csv', 'w', newline='') as f:
@@ -79,22 +79,22 @@ def main():
     timestamps = results[:, 0] / 60
     results = results[:, 1:]
     units = (
-        'degrees',
-        'degrees',
-        'meters',
-        'm/s',
-        'm/s',
-        'm/s',
-        'degrees',
-        'degrees',
-        'degrees',
+        '$\phi$ (deg)',
+        '$\lambda$ (deg)',
+        '$h$ (m)',
+        '$V^e$ (m/s)',
+        '$V^n$ (m/s)',
+        '$V^u$ (m/s)',
+        '$r$ (deg)',
+        '$p$ (deg)',
+        '$A$ (deg)',
     )
     labels = INS.get_params(get_labels=True)
     plt.figure(figsize=(15, 10.5))
     for i in range(9):
         plt.subplot(3, 3, i + 1)
-        ax = sns.lineplot(x=timestamps, y=results[:, i], label=labels[i + 1])
-        plt.xlabel('time (min)')
+        ax = sns.lineplot(x=timestamps, y=results[:, i])
+        plt.xlabel('$t$ (min)')
         plt.ylabel(units[i])
         plt.title(labels[i + 1].title())
 
