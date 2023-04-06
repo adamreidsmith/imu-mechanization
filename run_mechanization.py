@@ -79,8 +79,8 @@ def main():
     timestamps = results[:, 0] / 60
     results = results[:, 1:]
     units = (
-        '$\phi$ (deg)',
-        '$\lambda$ (deg)',
+        r'$\phi$ (deg)',
+        r'$\lambda$ (deg)',
         '$h$ (m)',
         '$V^e$ (m/s)',
         '$V^n$ (m/s)',
