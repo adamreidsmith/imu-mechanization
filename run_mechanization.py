@@ -36,10 +36,10 @@ def main():
     long = -114.13371127 * pi / 180  # rad
     h = 1118.502  # m
 
-    alignment_time = 300  # s
+    alignment_time = 120  # s
 
     # Instantiate the model
-    INS = INSMechanization(
+    INS = PureINSMechanization(
         h,
         lat,
         long,
@@ -102,6 +102,7 @@ def main():
         formatter = ScalarFormatter(useOffset=False, useMathText=True)
         ax.yaxis.set_major_formatter(formatter)
     plt.tight_layout()
+    # plt.savefig('plots.png', dpi=300)
     plt.show()
 
 

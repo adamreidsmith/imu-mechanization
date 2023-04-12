@@ -73,17 +73,23 @@ The following sections describe the implementation of the mechanization class in
 \subsection{Alignment}
 When a measurement is received in the \pyth{process_measurement} method, we check whether or not alignment has completed by checking the \pyth{alignment_complete} flag, which is initially set to False.  If alignment is not complete, the \pyth{align} method is called, passing in the current measurement.  The align method then uses the current timestamp (adjusted, if necessary, such that the first measurement received always has time 0) and the user-specified alignment time to determine whether or not alignment will be complete in this iteration.  If not, align then calls the \pyth{compensate_errors_and_compute_params} method (described in section 2.3) to compensate for deterministic errors in the accelerometer and gyroscope measurements.  The compensated values are then added to running totals, and a counter describing the number of times the \pyth{align} method has been called is incremented.  No further computation occurs.
 
-Once \pyth{align} determines that alignment is complete, it sets the \pyth{alignment_complete} flag to True, then computes the mean of the measurements received during the alignment time by dividing the totals by the number of iterations.  The roll, pitch, and azimuth of the IMU are then calculated via
+Once \pyth{align} determines that alignment is complete, it sets the \pyth{alignment_complete} flag to True, then computes the mean of the measurements received during the alignment time by dividing the totals by the number of measurements received.  The initial roll and pitch angles of the IMU are then calculated via
 $$r=-\textrm{sign}(f_z)\sin^{-1}\frac{f_x}{g}$$
-$$p=\textrm{sign}(f_z)\sin^{-1}\frac{f_y}{g}$$
-$$A=\tan^{-1}\frac{-\omega_x}{\omega_y}$$
-where $f$ and $\omega$ are the mean accelerometer and gyroscope measurements during alignment, respectively, and $g$ is the local gravity.  These values are used to compute the rotation of the IMU w.r.t. the LLF as
+$$p=\textrm{sign}(f_z)\sin^{-1}\frac{f_y}{g}.$$
+where $f$ is the mean accelerometer measurement during alignment and $g$ is the local gravity.  Before performing gyroscope compassing to determine the initial azimuth, we must rotate the gyroscope measurements to the level plane.  This can be done by applying the rotation matrix
+$$R_b^{level}=R_x(-p)R_y(-r)$$
+to the mean angular velocity measurement $\omega$:
+$$\bar \omega=R_b^{level}\omega.$$
+The initial azimuth can then be calculated as 
+$$A=\tan^{-1}\frac{-\bar\omega_x}{\bar\omega_y}.$$
+
+The initial Euler angles are then used to compute the rotation of the IMU w.r.t. the LLF as
 $$ R_b^l=\begin{pmatrix}
 \cos A \cos r + \sin A \sin r \sin p & \sin A \cos p & \cos A \sin r - \sin A \cos r \sin p \\
 \cos A \sin r \sin p - \sin A \cos r & \cos A \cos p & -\sin A \sin r - \cos A \cos r \sin p \\
 -\cos p \sin r & \sin p & \cos p \cos r
 \end{pmatrix}.$$
-The quaternion describing this rotation is the calculated using the elements of $R_b^l$:
+The quaternion describing this rotation can be calculated from the elements of $R_b^l$:
 $$Q=\begin{pmatrix}
 (r_{32}-r_{23})/4q_4 \\
 (r_{13}-r_{32})/4q_4 \\
@@ -91,7 +97,7 @@ $$Q=\begin{pmatrix}
 q_4
 \end{pmatrix}$$
 where
-$$q_4=\frac12\sqrt{1+r_{11}+r_{22}+r_{33}}$$
+$$q_4=\frac12\sqrt{1+r_{11}+r_{22}+r_{33}}.$$
 This quaternion is then divided component-wise by its Euclidean norm, which allows us to recompute the rotation matrix $R_b^l$ and ensure it is orthogonal.  $R_b^l$ can be recovered from the normalized quaternion via
 $$ R_b^l=\begin{pmatrix}
 q_1^2-q_2^2-q_3^2+q_4^2 & 2(q_1q_2-q_3q_4) & 2(q_1q_3+q_2q_4) \\
@@ -167,6 +173,8 @@ and
 $$\phi_t=\phi_{t-1}+\frac12\left(\frac{V^n_{t-1}+V^n_t}{M+h}\right)\Delta t$$
 and the updated altitude is given by
 $$h_t=h_{t-1}+\frac12\left(V^u_{t-1}+V^u_t\right)\Delta t.$$
+
+\subsection{Error computation}
 
 \subsection{Summary of mechanization implementation}
 The steps to mechanization with the \pyth{INSMechanization} class can be summarized as follows:

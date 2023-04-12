@@ -74,10 +74,10 @@ class INSMechanization:
         self.post_alignment_pitch_error = None  # pitch error after alignment
         self.post_alignment_azimuth_error = None  # azimuth error after alignment
 
-        # Errors
-        self.roll_error = 0
-        self.pitch_error = 0
-        self.azimuth_error = 0
+        # # Errors
+        # self.roll_error = 0
+        # self.pitch_error = 0
+        # self.azimuth_error = 0
 
     @staticmethod
     def matinv(m):
@@ -139,32 +139,52 @@ class INSMechanization:
         return [[a, d, g], [b, e, h], [c, f, i]]
 
     @staticmethod
-    def get_rotation_matrix(roll, pitch, azimuth):
-        '''Compute the rotation matrix to rotate the body frame to the LLF from the Euler angles'''
-
-        cosr = cos(roll)
-        cosp = cos(pitch)
-        cosa = cos(azimuth)
-        sinr = sin(roll)
-        sinp = sin(pitch)
-        sina = sin(azimuth)
-        cosacosr = cosa * cosr
-        sinasinr = sina * sinr
-        sinacosr = sina * cosr
-        cosasinr = cosa * sinr
+    def matprod(A, B):
         return [
             [
-                cosacosr + sinasinr * sinp,
-                sina * cosp,
-                cosasinr - sinacosr * sinp,
+                A[0][0] * B[0][0] + A[0][1] * B[1][0] + A[0][2] * B[2][0],
+                A[0][0] * B[0][1] + A[0][1] * B[1][1] + A[0][2] * B[2][1],
+                A[0][0] * B[0][2] + A[0][1] * B[1][2] + A[0][2] * B[2][2],
             ],
             [
-                cosasinr * sinp - sinacosr,
-                cosa * cosp,
-                -sinasinr - cosacosr * sinp,
+                A[1][0] * B[0][0] + A[1][1] * B[1][0] + A[1][2] * B[2][0],
+                A[1][0] * B[0][1] + A[1][1] * B[1][1] + A[1][2] * B[2][1],
+                A[1][0] * B[0][2] + A[1][1] * B[1][2] + A[1][2] * B[2][2],
             ],
-            [-cosp * sinr, sinp, cosp * cosr],
+            [
+                A[2][0] * B[0][0] + A[2][1] * B[1][0] + A[2][2] * B[2][0],
+                A[2][0] * B[0][1] + A[2][1] * B[1][1] + A[2][2] * B[2][1],
+                A[2][0] * B[0][2] + A[2][1] * B[1][2] + A[2][2] * B[2][2],
+            ],
         ]
+
+    def get_rotation_matrix(self, r, p, A):
+        # '''Compute the rotation matrix to rotate the body frame to the LLF from the Euler angles'''
+        # cosr = cos(roll)
+        # cosp = cos(pitch)
+        # cosa = cos(azimuth)
+        # sinr = sin(roll)
+        # sinp = sin(pitch)
+        # sina = sin(azimuth)
+        # cosacosr = cosa * cosr
+        # sinasinr = sina * sinr
+        # sinacosr = sina * cosr
+        # cosasinr = cosa * sinr
+        # return [
+        #     [
+        #         cosacosr + sinasinr * sinp,
+        #         sina * cosp,
+        #         cosasinr - sinacosr * sinp,
+        #     ],
+        #     [
+        #         cosasinr * sinp - sinacosr,
+        #         cosa * cosp,
+        #         -sinasinr - cosacosr * sinp,
+        #     ],
+        #     [-cosp * sinr, sinp, cosp * cosr],
+        # ]
+
+        return self.matprod(self.Rz(-A), self.matprod(self.Rx(p), self.Ry(r)))
 
     @staticmethod
     def matrix_to_quaternion(R):
@@ -206,6 +226,27 @@ class INSMechanization:
 
         v1, v2, v3 = v
         return [[0, -v3, v2], [v3, 0, -v1], [-v2, v1, 0]]
+
+    @staticmethod
+    def Rx(theta):
+        '''Returns the rotation matrix about the x-axis by angle theta using the sign convention in Wikipedia'''
+        costheta = cos(theta)
+        sintheta = sin(theta)
+        return [[1, 0, 0], [0, costheta, -sintheta], [0, sintheta, costheta]]
+
+    @staticmethod
+    def Ry(theta):
+        '''Returns the rotation matrix about the x-axis by angle theta using the sign convention in Wikipedia'''
+        costheta = cos(theta)
+        sintheta = sin(theta)
+        return [[costheta, 0, sintheta], [0, 1, 0], [-sintheta, 0, costheta]]
+
+    @staticmethod
+    def Rz(theta):
+        '''Returns the rotation matrix about the z-axis by angle theta using the sign convention in Wikipedia'''
+        costheta = cos(theta)
+        sintheta = sin(theta)
+        return [[costheta, -sintheta, 0], [sintheta, costheta, 0], [0, 0, 1]]
 
     @staticmethod
     def gravity(lat, h):
@@ -287,7 +328,14 @@ class INSMechanization:
             # Compute roll, pitch, and azimuth based on means of measurements during static alignment
             self.roll = -copysign(1, self.alignment_acc_mean[2]) * asin(self.alignment_acc_mean[0] / g)
             self.pitch = copysign(1, self.alignment_acc_mean[2]) * asin(self.alignment_acc_mean[1] / g)
-            self.azimuth = atan(-self.alignment_omega_mean[0] / self.alignment_omega_mean[1])
+
+            # Rotate the gyroscope measurements to the level plane before performing gyro compassing
+            levelled_alignment_omega_mean = self.matvec(
+                self.Rx(self.pitch), self.matvec(self.Ry(self.roll), self.alignment_omega_mean)
+            )
+            self.azimuth = atan(-levelled_alignment_omega_mean[0] / levelled_alignment_omega_mean[1])
+
+            # self.azimuth = atan(-self.alignment_omega_mean[0] / self.alignment_omega_mean[1])
 
             # Compute rotation matrix and the associated quaternion
             R_b2l = self.get_rotation_matrix(self.roll, self.pitch, self.azimuth)

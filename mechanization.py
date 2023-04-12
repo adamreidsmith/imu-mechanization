@@ -71,45 +71,45 @@ class INSMechanization:
         self.post_alignment_pitch_error = None  # pitch error after alignment
         self.post_alignment_azimuth_error = None  # azimuth error after alignment
 
-        # Errors
-        self.roll_error_sq = 0
-        self.pitch_error_sq = 0
-        self.azimuth_error_sq = 0
+        # # Errors
+        # self.roll_error_sq = 0
+        # self.pitch_error_sq = 0
+        # self.azimuth_error_sq = 0
 
-    @staticmethod
-    def get_rotation_matrix(r, p, A):
+    # @staticmethod
+    def get_rotation_matrix(self, r, p, A):
         '''Compute the rotation matrix to rotate the body frame to the LLF from the Euler angles'''
+        # cosr = cos(r)
+        # cosp = cos(p)
+        # cosa = cos(A)
+        # sinr = sin(r)
+        # sinp = sin(p)
+        # sina = sin(A)
+        # cosacosr = cosa * cosr
+        # sinasinr = sina * sinr
+        # sinacosr = sina * cosr
+        # cosasinr = cosa * sinr
+        # return np.array(
+        #     [
+        #         [
+        #             cosacosr + sinasinr * sinp,
+        #             sina * cosp,
+        #             cosasinr - sinacosr * sinp,
+        #         ],
+        #         [
+        #             cosasinr * sinp - sinacosr,
+        #             cosa * cosp,
+        #             -sinasinr - cosacosr * sinp,
+        #         ],
+        #         [-cosp * sinr, sinp, cosp * cosr],
+        #     ]
+        # )
 
-        cosr = cos(r)
-        cosp = cos(p)
-        cosa = cos(A)
-        sinr = sin(r)
-        sinp = sin(p)
-        sina = sin(A)
-        cosacosr = cosa * cosr
-        sinasinr = sina * sinr
-        sinacosr = sina * cosr
-        cosasinr = cosa * sinr
-        return np.array(
-            [
-                [
-                    cosacosr + sinasinr * sinp,
-                    sina * cosp,
-                    cosasinr - sinacosr * sinp,
-                ],
-                [
-                    cosasinr * sinp - sinacosr,
-                    cosa * cosp,
-                    -sinasinr - cosacosr * sinp,
-                ],
-                [-cosp * sinr, sinp, cosp * cosr],
-            ]
-        )
+        return self.Rz(-A) @ self.Rx(p) @ self.Ry(r)
 
     @staticmethod
     def matrix_to_normalized_quaternion(R):
         '''Convert a rotation matrix to a normalized quaternion'''
-
         q4 = sqrt(1 + R[0, 0] + R[1, 1] + R[2, 2]) / 2
         four_q4 = 4 * q4
         q1 = (R[2, 1] - R[1, 2]) / four_q4
@@ -121,7 +121,6 @@ class INSMechanization:
     @staticmethod
     def quaternion_to_matrix(q):
         '''Convert a normalized quaternion to a rotation matrix'''
-
         q = q.reshape(4)
         q1, q2, q3, q4 = q
         qq1, qq2, qq3, qq4 = q * q
@@ -142,14 +141,33 @@ class INSMechanization:
     @staticmethod
     def vec_to_skew(v):
         '''Convert a vector to its skew-symmetric representation'''
-
         v1, v2, v3 = v.reshape(3)
         return np.array([[0, -v3, v2], [v3, 0, -v1], [-v2, v1, 0]])
 
     @staticmethod
+    def Rx(theta):
+        '''Returns the rotation matrix about the x-axis by angle theta using the sign convention in Wikipedia'''
+        costheta = cos(theta)
+        sintheta = sin(theta)
+        return np.array([[1, 0, 0], [0, costheta, -sintheta], [0, sintheta, costheta]])
+
+    @staticmethod
+    def Ry(theta):
+        '''Returns the rotation matrix about the y-axis by angle theta using the sign convention in Wikipedia'''
+        costheta = cos(theta)
+        sintheta = sin(theta)
+        return np.array([[costheta, 0, sintheta], [0, 1, 0], [-sintheta, 0, costheta]])
+
+    @staticmethod
+    def Rz(theta):
+        '''Returns the rotation matrix about the z-axis by angle theta using the sign convention in Wikipedia'''
+        costheta = cos(theta)
+        sintheta = sin(theta)
+        return np.array([[costheta, -sintheta, 0], [sintheta, costheta, 0], [0, 0, 1]])
+
+    @staticmethod
     def gravity(lat, h):
         '''Compute the gravity vector given the latitude and height'''
-
         A = (
             9.7803267715,
             0.0052790414,
@@ -174,7 +192,6 @@ class INSMechanization:
 
     def compensate_errors_and_compute_params(self, acc, omega, return_params=True):
         '''Compensate for deterministic errors and compute the Earth parameters'''
-
         # Compute gravity
         g = self.gravity(self.lat, self.h)
 
@@ -194,7 +211,6 @@ class INSMechanization:
 
     def align(self, acc, omega, timestamp):
         '''Compute the alignment of the IMU'''
-
         if self.alignment_complete:
             raise RuntimeError('align method called after alignment is complete')
 
@@ -219,7 +235,12 @@ class INSMechanization:
             # Compute roll, pitch, and azimuth based on means of measurements during static alignment
             self.roll = -np.sign(self.alignment_acc_mean[2, 0]) * asin(self.alignment_acc_mean[0, 0] / g)
             self.pitch = np.sign(self.alignment_acc_mean[2, 0]) * asin(self.alignment_acc_mean[1, 0] / g)
-            self.azimuth = atan(-self.alignment_omega_mean[0, 0] / self.alignment_omega_mean[1, 0])
+
+            # Rotate the gyroscope measurements to the level plane before performing gyro compassing
+            levelled_alignment_omega_mean = self.Rx(self.pitch) @ self.Ry(self.roll) @ self.alignment_omega_mean
+            self.azimuth = atan(-levelled_alignment_omega_mean[0, 0] / levelled_alignment_omega_mean[1, 0])
+
+            # self.azimuth = atan(-self.alignment_omega_mean[0, 0] / self.alignment_omega_mean[1, 0])
 
             # Compute rotation matrix and the associated quaternion
             R_b2l = self.get_rotation_matrix(self.roll, self.pitch, self.azimuth)
@@ -239,7 +260,6 @@ class INSMechanization:
 
     def angular_velocity_compensation(self, N, M, omega, delta_t):
         '''Compensate for the LLF transportation rate and the Earth's rotation'''
-
         # Compute the rotation between the inertial frame and LLF as seen in the body frame
         N_plus_h = N + self.h
         omega_lib = self.R_b2l.T @ np.array(
@@ -258,7 +278,6 @@ class INSMechanization:
 
     def attitude_integration(self, d_theta_x, d_theta_y, d_theta_z):
         '''Update the quaternion and rotation matrices and compute roll, pitch, and azimuth'''
-
         # Update the quaternion based on the angular increments
         quat_update_matrix = np.array(
             [
@@ -283,7 +302,6 @@ class INSMechanization:
 
     def v_and_r_integration(self, acc, delta_t, g, N, M):
         '''Compute the velocity increments and update the LLF velocity and the position'''
-
         # Compute omega_lel in skew-symmetric form
         N_plus_h = N + self.h
         omega_lel = np.array(
@@ -338,7 +356,6 @@ class INSMechanization:
         in attitude due to a random walk process is proportional to the square root of the number of
         dimensions.
         '''
-
         if not self.alignment_complete:
             return
 
@@ -348,7 +365,6 @@ class INSMechanization:
 
     def process_measurement(self, measurement):
         '''Process a measurement from the IMU'''
-
         # In case we get a non-zero start time, shift the time steps back to the time since the first measurment
         if self.start_time is None:
             self.start_time = measurement[0]
@@ -386,7 +402,6 @@ class INSMechanization:
 
         Returns column labels if get_labels is True
         '''
-
         if get_labels:
             return (
                 'time',
