@@ -74,105 +74,169 @@ The following sections describe the implementation of the mechanization class in
 When a measurement is received in the \pyth{process_measurement} method, we check whether or not alignment has completed by checking the \pyth{alignment_complete} flag, which is initially set to False.  If alignment is not complete, the \pyth{align} method is called, passing in the current measurement.  The align method then uses the current timestamp (adjusted, if necessary, such that the first measurement received always has time 0) and the user-specified alignment time to determine whether or not alignment will be complete in this iteration.  If not, align then calls the \pyth{compensate_errors_and_compute_params} method (described in section 2.3) to compensate for deterministic errors in the accelerometer and gyroscope measurements.  The compensated values are then added to running totals, and a counter describing the number of times the \pyth{align} method has been called is incremented.  No further computation occurs.
 
 Once \pyth{align} determines that alignment is complete, it sets the \pyth{alignment_complete} flag to True, then computes the mean of the measurements received during the alignment time by dividing the totals by the number of measurements received.  The initial roll and pitch angles of the IMU are then calculated via
-$$r=-\textrm{sign}(f_z)\sin^{-1}\frac{f_x}{g}$$
-$$p=\textrm{sign}(f_z)\sin^{-1}\frac{f_y}{g}.$$
+\begin{equation}
+r=-\textrm{sign}(f_z)\sin^{-1}\frac{f_x}{g}
+\end{equation}
+\begin{equation}
+p=\textrm{sign}(f_z)\sin^{-1}\frac{f_y}{g}.
+\end{equation}
 where $f$ is the mean accelerometer measurement during alignment and $g$ is the local gravity.  Before performing gyroscope compassing to determine the initial azimuth, we must rotate the gyroscope measurements to the level plane.  This can be done by applying the rotation matrix
-$$R_b^{level}=R_x(-p)R_y(-r)$$
-to the mean angular velocity measurement $\omega$:
-$$\bar \omega=R_b^{level}\omega.$$
+\begin{equation}
+R_b^{level}=R_x(p)R_y(r)
+\end{equation}
+to the mean angular velocity measurement $\omega$
+\begin{equation}
+\bar \omega=R_b^{level}\omega
+\end{equation}
+where $R_x$ and $R_y$ are rotation matrices about the $x$- and $y$- axes, respectively, using the sign convention outlined in the \href{https://en.wikipedia.org/wiki/Rotation_matrix}{Wikipedia page}. 
 The initial azimuth can then be calculated as 
-$$A=\tan^{-1}\frac{-\bar\omega_x}{\bar\omega_y}.$$
+\begin{equation}
+A=\tan^{-1}\frac{-\bar\omega_x}{\bar\omega_y}.
+\end{equation}
 
 The initial Euler angles are then used to compute the rotation of the IMU w.r.t. the LLF as
-$$ R_b^l=\begin{pmatrix}
-\cos A \cos r + \sin A \sin r \sin p & \sin A \cos p & \cos A \sin r - \sin A \cos r \sin p \\
-\cos A \sin r \sin p - \sin A \cos r & \cos A \cos p & -\sin A \sin r - \cos A \cos r \sin p \\
--\cos p \sin r & \sin p & \cos p \cos r
-\end{pmatrix}.$$
-The quaternion describing this rotation can be calculated from the elements of $R_b^l$:
-$$Q=\begin{pmatrix}
+%$$ R_b^l=\begin{pmatrix}
+%\cos A \cos r + \sin A \sin r \sin p & \sin A \cos p & \cos A \sin r - \sin A \cos r \sin p \\
+%\cos A \sin r \sin p - \sin A \cos r & \cos A \cos p & -\sin A \sin r - \cos A \cos r \sin p \\
+%-\cos p \sin r & \sin p & \cos p \cos r
+%\end{pmatrix}.$$
+\begin{equation}
+R_b^l=R_z(-A)R_x(p)R_y(r).
+\end{equation}
+The quaternion describing this rotation can be calculated from the elements of $R_b^l$:\begin{equation}
+Q=\begin{pmatrix}
 (r_{32}-r_{23})/4q_4 \\
 (r_{13}-r_{32})/4q_4 \\
 (r_{21}-r_{12})/4q_4 \\
 q_4
-\end{pmatrix}$$
+\end{pmatrix}
+\end{equation}
 where
-$$q_4=\frac12\sqrt{1+r_{11}+r_{22}+r_{33}}.$$
+\begin{equation}
+q_4=\frac12\sqrt{1+r_{11}+r_{22}+r_{33}}.
+\end{equation}
 This quaternion is then divided component-wise by its Euclidean norm, which allows us to recompute the rotation matrix $R_b^l$ and ensure it is orthogonal.  $R_b^l$ can be recovered from the normalized quaternion via
-$$ R_b^l=\begin{pmatrix}
+\begin{equation}
+R_b^l=\begin{pmatrix}
 q_1^2-q_2^2-q_3^2+q_4^2 & 2(q_1q_2-q_3q_4) & 2(q_1q_3+q_2q_4) \\
 (q_1q_2+q_3q_4) & -q_1^2+q_2^2-q_3^2+q_4^2 & 2(q_2q_3-q_1q_4) \\
 2(q_1q_3-q_2q_4) &  2(q_2q_3+q_1q_4) & -q_1^2-q_2^2+q_3^2+q_4^2
-\end{pmatrix}.$$
+\end{pmatrix}.
+\end{equation}
 
 Once alignment is complete and the initial attitude is determined, the \pyth{align} method will raise an error if called again.
 
 \subsection{Compensating for deterministic errors and computation of Earth parameters}
-The \pyth{compensate_errors_and_compute_params} method compensates for deterministic errors in the accelerometer and gyroscope measurements and computes the Earth parameters at the current latitude.  Deterministic errors in the accelerometer measurements are corrected by accounting for the bias, scale factor, and non-orthogonality of the accelerometer.  The corrected acceleration $\hat f$ is given by $$\hat f=(I+S_f+N_f)^{-1}(f-b_f)$$ where $f$ is the raw accelerometer measurement, $b_f$ is the accelerometer bias, $S_f$ is the scale factor matrix of the accelerometer, and $N$ is the non-orthogonality matrix of the accelerometer.  Similarly, deterministic errors in the gyroscope measurement are corrected via $$\hat \omega=(I+S_\omega+N_\omega)^{-1}(\omega-b_\omega).$$
+The \pyth{compensate_errors_and_compute_params} method compensates for deterministic errors in the accelerometer and gyroscope measurements and computes the Earth parameters at the current latitude.  Deterministic errors in the accelerometer measurements are corrected by accounting for the bias, scale factor, and non-orthogonality of the accelerometer.  The corrected acceleration $\hat f$ is given by 
+\begin{equation}
+\hat f=(I+S_f+N_f)^{-1}(f-b_f)
+\end{equation}
+where $f$ is the raw accelerometer measurement, $b_f$ is the accelerometer bias, $S_f$ is the scale factor matrix of the accelerometer, and $N$ is the non-orthogonality matrix of the accelerometer.  Similarly, deterministic errors in the gyroscope measurement are corrected via 
+\begin{equation}
+\hat \omega=(I+S_\omega+N_\omega)^{-1}(\omega-b_\omega).
+\end{equation}
 
-The local gravity $g$ is calculated using the formula  $$g=a_1(1+a_2\sin^2\phi+a_3\sin^4\phi)+(a_4+a_5\sin^2\phi)h+a_6h^2$$ derived by Heiskanen and Moritz (1967), where $\phi$ is the current latitude, $h$ is the height above the ellipsoid, and the $a_i$ are coefficients given by GRS 80.
+The local gravity $g$ is calculated using the formula
+\begin{equation}
+g=a_1(1+a_2\sin^2\phi+a_3\sin^4\phi)+(a_4+a_5\sin^2\phi)h+a_6h^2
+\end{equation}
+derived by Heiskanen and Moritz (1967), where $\phi$ is the current latitude, $h$ is the height above the ellipsoid, and the $a_i$ are coefficients given by GRS 80.
 
 The radii of curvature of the Earth in the prime vertical $N$ and meridian $M$ directions are then computed as 
-$$N=\frac{a}{\sqrt{1-e^2\sin^2\phi}}$$
-$$M=N\cdot \frac{1-e^2}{1-e^2\sin^2\phi}$$
+\begin{equation}
+N=\frac{a}{\sqrt{1-e^2\sin^2\phi}}
+\end{equation}
+\begin{equation}
+M=N\cdot \frac{1-e^2}{1-e^2\sin^2\phi}
+\end{equation}
 where $e$ is the eccentricity of the Earth and $a$ is the semi-major axis.
 
 \subsection{Angular velocity compensation}
 
 After alignment is complete and deterministic errors are corrected, the next step is to compensate for the rotation of the Earth and the movement of the local level frame.  This is necessary since the gyroscope axes in the North and up directions observe part of the Earth's rotation, and the motion of the local level frame causes a change in orientation of the local level frame axes.  Due to these effects, the rotation of the LLF w.r.t. the inertial frame as seen in the body frame is given by 
-$$\omega_{il}^b=R_l^b\begin{pmatrix}
+\begin{equation}
+\omega_{il}^b=R_l^b\begin{pmatrix}
 \frac{-V^n}{M+h} \\[.1cm]
 \frac{V^e}{N+h}+\omega_e \cos\phi \\[.1cm]
 \frac{V^e\tan\phi}{N+h}+\omega_e \sin\phi
-\end{pmatrix}$$
-where $\omega_e$ is the rotation rate of the Earth and $V^e$ and $V^n$ are the velocities of the LLF in the East and North directions, respectively.  Multiplying this by the current time step $\Delta t$ gives the angular changes $\theta_{il}^b$ corresponding to $\omega_{il}^b$.  The angular changes of the body w.r.t. the LLF can then be computed as $$\theta_{lb}^b=\theta_{ib}^b-\theta_{il}^b=\omega\cdot\Delta t-\theta_{il}^b$$ where $\omega$ is the corrected gyroscope measurement.
+\end{pmatrix}
+\end{equation}
+where $\omega_e$ is the rotation rate of the Earth and $V^e$ and $V^n$ are the velocities of the LLF in the East and North directions, respectively.  Multiplying this by the current time step $\Delta t$ gives the angular changes $\theta_{il}^b$ corresponding to $\omega_{il}^b$.  The angular changes of the body w.r.t. the LLF can then be computed as 
+\begin{equation}
+\theta_{lb}^b=\theta_{ib}^b-\theta_{il}^b=\omega\cdot\Delta t-\theta_{il}^b
+\end{equation}
+where $\omega$ is the corrected gyroscope measurement.
 
 The \pyth{angular_velocity_compensation} method performs the above calculation and returns $\theta_{lb}^b$ as a numpy array.
 
 \subsection{Attitude integration}
 After angular velocity compensation, attitude is then updated in the \pyth{attitude_integration} method. First, the quaternion update matrix $U$ is computed as
-$$U=\begin{pmatrix}
+\begin{equation}
+U=\begin{pmatrix}
 0 & \Delta\theta_z & -\Delta\theta_y & \Delta\theta_x \\
 -\Delta\theta_z & 0 & \Delta\theta_x & \Delta\theta_y \\
 \Delta\theta_y & -\Delta\theta_x & 0 & \Delta\theta_z \\
 -\Delta\theta_x & -\Delta\theta_y & -\Delta\theta_z & 0 
-\end{pmatrix}$$
+\end{pmatrix}
+\end{equation}
 where the $\Delta\theta_i$ are the components of $\theta_{lb}^b$ as returned by the \pyth{angular_velocity_compensation} method.  The quaternion $Q$ describing the rotation of the body w.r.t. the LLF can then be updated as
-$$Q_t=Q_{t-1}+\frac12UQ_{t-1}$$
+\begin{equation}
+Q_t=Q_{t-1}+\frac12UQ_{t-1}
+\end{equation}
 and, if necessary, normalized by dividing component-wise by its Euclidean norm. Using the method described in section 2.2, the updated orthogonal rotation matrix $R_b^l$ can then be computed from $Q$.
 The updated roll, pitch, and azimuth can be determined from $R_b^l$ via 
-$$r=\tan^{-1}\frac{-r_{31}}{r_{33}}$$
-$$p=\tan^{-1}\frac{r_{32}}{\sqrt{r_{12}^2+r_{22}^2}}$$
-$$A=\tan^{-1}\frac{r_{12}}{r_{22}}.$$
+\begin{equation}
+r=\tan^{-1}\frac{-r_{31}}{r_{33}}
+\end{equation}
+\begin{equation}
+p=\tan^{-1}\frac{r_{32}}{\sqrt{r_{12}^2+r_{22}^2}}
+\end{equation}
+\begin{equation}
+A=\tan^{-1}\frac{r_{12}}{r_{22}}.
+\end{equation}
 
 \subsection{Velocity and position integration}
 The final step to each mechanization iteration is to update the LLF velocity and position.  This is performed in the \pyth{v_and_r_integration} method.  
 The acceleration measurements provided by the accelerometer not only contain the acceleration in the body frame, but also the accelerations caused by gravity and the Coriolis effect. Thus, these values need to be removed from the accelerometer measurements before updating the navigation parameters.
 
 The correction for the Coriolis effect is given by $-2(\Omega_{ie}^l+\Omega_{el}^l)V^l$ where $V^l$ is the velocity of the LLF.  $\Omega_{ie}^l$ and $\Omega_{el}^l$ are the skew-symmetric representations of 
-$$\omega_{ie}^l=\begin{pmatrix}
+\begin{equation}
+\omega_{ie}^l=\begin{pmatrix}
 0 \\
 \omega_e\cos\phi \\
 \omega_e\sin\phi
-\end{pmatrix}$$
+\end{pmatrix}
+\end{equation}
 and
-$$\omega_{le}^l=\begin{pmatrix}
+\begin{equation}
+\omega_{le}^l=\begin{pmatrix}
 \frac{-V^n}{M+h} \\[.1cm]
 \frac{V^e}{N+h} \\[.1cm]
 \frac{V^e\tan\phi}{N+h}
-\end{pmatrix}$$
+\end{pmatrix}
+\end{equation}
 respectively.  The static method \pyth{vec_to_skew} converts these vectors to matrices, and then the true acceleration in the LLF is computed as
-$$a^l=R_b^lf^b-2(\Omega_{ie}^l+\Omega_{el}^l)V^l+g^l$$
-where $f^b$ is the corrected accelerometer measurement and $g^l=\begin{pmatrix}0&0&-g\end{pmatrix}^T$ is the gravitational acceleration in the LLF.  The velocity increment $\Delta V^l$ in the LLF is then obtained by multiplying this acceleration with the time step, and velocity is then updated via
-$$V^l_t=V^l_{t-1}+\frac12\left(\Delta V^l_{t-1}+\Delta V^l_t\right)$$ 
+\begin{equation}
+a^l=R_b^lf^b-2(\Omega_{ie}^l+\Omega_{el}^l)V^l+g^l
+\end{equation}
+where $f^b$ is the corrected accelerometer measurement and $g^l=\begin{pmatrix}0&0&-g(\phi, h)\end{pmatrix}^T$ is the gravitational acceleration in the LLF.  The velocity increment $\Delta V^l$ in the LLF is then obtained by multiplying this acceleration with the time step, and velocity is then updated via
+\begin{equation}
+V^l_t=V^l_{t-1}+\frac12\left(\Delta V^l_{t-1}+\Delta V^l_t\right)
+\end{equation}
 where $\Delta V^l_0=0$.
 
 Finally, position of the LLF is then updated.  The updated longitude $\lambda$ and latitude $\phi$ are computed as
-$$\lambda_t=\lambda_{t-1}+\frac12\left(\frac{V^e_{t-1}+V^e_t}{(N+h)\cos\phi}\right)\Delta t$$
+\begin{equation}
+\lambda_t=\lambda_{t-1}+\frac12\left(\frac{V^e_{t-1}+V^e_t}{(N+h)\cos\phi}\right)\Delta t
+\end{equation}
 and
-$$\phi_t=\phi_{t-1}+\frac12\left(\frac{V^n_{t-1}+V^n_t}{M+h}\right)\Delta t$$
+\begin{equation}
+\phi_t=\phi_{t-1}+\frac12\left(\frac{V^n_{t-1}+V^n_t}{M+h}\right)\Delta t
+\end{equation}
 and the updated altitude is given by
-$$h_t=h_{t-1}+\frac12\left(V^u_{t-1}+V^u_t\right)\Delta t.$$
+\begin{equation}
+h_t=h_{t-1}+\frac12\left(V^u_{t-1}+V^u_t\right)\Delta t.
+\end{equation}
 
 \subsection{Error computation}
 
