@@ -26,45 +26,53 @@ class INSMechanization:
         long0: float,  # initial longitude
         accel_bias: float | Callable = 0,  # accel bias
         gyro_bias: float = 0,  # gyro bias
-        accel_sf: float | list = 0,  # accel scale factor matrix
-        gyro_sf: float | list = 0,  # gyro scale factor matrix
-        accel_no: list = ((0, 0, 0), (0, 0, 0), (0, 0, 0)),  # accel non-orthogonality
-        gyro_no: list = ((0, 0, 0), (0, 0, 0), (0, 0, 0)),  # gyro non-orthogonality
+        accel_sf: float | list[list[float]] = 0,  # accel scale factor matrix
+        gyro_sf: float | list[list[float]] = 0,  # gyro scale factor matrix
+        accel_no: list[list[float]] = ((0, 0, 0), (0, 0, 0), (0, 0, 0)),  # accel non-orthogonality
+        gyro_no: list[list[float]] = ((0, 0, 0), (0, 0, 0), (0, 0, 0)),  # gyro non-orthogonality
         alignment_time: float = 0,  # alignment time in seconds
     ) -> None:
-        self.h = h0
-        self.lat = lat0
-        self.long = long0
-        self.accel_bias = accel_bias
-        self.gyro_bias = gyro_bias
-        accel_sf = (
+        self.h: float = h0
+        self.lat: float = lat0
+        self.long: float = long0
+        self.accel_bias: float | Callable = accel_bias
+        self.gyro_bias: float = gyro_bias
+        accel_sf: float | list[list[float]] = (
             ((accel_sf, 0, 0), (0, accel_sf, 0), (0, accel_sf, 0)) if isinstance(accel_sf, (float, int)) else accel_sf
         )
-        gyro_sf = ((gyro_sf, 0, 0), (0, gyro_sf, 0), (0, gyro_sf, 0)) if isinstance(gyro_sf, (float, int)) else gyro_sf
-        self.accel_inv_error_matrix = self.matinv(self.matsum(self.matsum(self.i3, accel_sf), accel_no))
-        self.gyro_inv_error_matrix = self.matinv(self.matsum(self.matsum(self.i3, gyro_sf), gyro_no))
-        self.quat = None  # rotation quaternion; inititalized when self.align is called
-        self.R_b2l = None  # rotation matrix; inititalized when self.align is called
-        self.v_llf = [0, 0, 0]  # initial ENU velocities
-        self.prev_delta_v_llf = [0, 0, 0]  # change in v in LLF at previous t
-        self.prev_time = 0  # previous time, used to determine delta_t
-        self.roll = self.pitch = self.azimuth = 0  # initialize to store orientation
-        self.timestamp = 0  # store the current timestamp
-        self.start_time = None  # start time of the mechanization
+        gyro_sf: float | list[list[float]] = (
+            ((gyro_sf, 0, 0), (0, gyro_sf, 0), (0, gyro_sf, 0)) if isinstance(gyro_sf, (float, int)) else gyro_sf
+        )
+        self.accel_inv_error_matrix: list[list[float]] = self.matinv(
+            self.matsum(self.matsum(self.i3, accel_sf), accel_no)
+        )
+        self.gyro_inv_error_matrix: list[list[float]] = self.matinv(
+            self.matsum(self.matsum(self.i3, gyro_sf), gyro_no)
+        )
+        self.quat: list[float] | None = None  # rotation quaternion; inititalized when self.align is called
+        self.R_b2l: list[list[float]] | None = None  # rotation matrix; inititalized when self.align is called
+        self.v_llf: list[float] = [0, 0, 0]  # initial ENU velocities
+        self.prev_delta_v_llf: list[float] = [0, 0, 0]  # change in v in LLF at previous t
+        self.prev_time: float = 0  # previous time, used to determine delta_t
+        self.roll: float = 0
+        self.pitch: float = 0
+        self.azimuth: float = 0
+        self.timestamp: float = 0  # store the current timestamp
+        self.start_time: float | None = None  # start time of the mechanization
 
         # Alignment specific attributes
-        self.alignment_time = alignment_time
-        self.alignment_complete = False  # flag to determine if alignment is completed
-        self.alignment_acc_mean = [0, 0, 0]  # running mean for accel alignment
-        self.alignment_omega_mean = [0, 0, 0]  # running mean for gyro alignment
-        self.alignment_it = 0  # couter to keep track of alignment iterations
+        self.alignment_time: float = alignment_time
+        self.alignment_complete: bool = False  # flag to determine if alignment is completed
+        self.alignment_acc_mean: list[float] = [0, 0, 0]  # running mean for accel alignment
+        self.alignment_omega_mean: list[float] = [0, 0, 0]  # running mean for gyro alignment
+        self.alignment_it: int = 0  # couter to keep track of alignment iterations
 
         # Values for error tracking
-        self.initial_attitude = None  # initial roll, pitch, azimuth as computed by alignment
-        self.position_errors = [0, 0, 0]  # errors in position in the initial LLF
+        self.initial_attitude: list[float] | None = None  # initial roll, pitch, azimuth as computed by alignment
+        self.position_errors: list[float] = [0, 0, 0]  # errors in position in the initial LLF
 
     @staticmethod
-    def matinv(m):
+    def matinv(m: list[list[float]]) -> list[list[float]]:
         '''Inverse of a 3x3 matrix'''
 
         a, b, c = m[0]
@@ -93,7 +101,7 @@ class INSMechanization:
         ]
 
     @staticmethod
-    def matsum(A, B):
+    def matsum(A: list[list[float]], B: list[list[float]]) -> list[list[float]]:
         '''Sum of two 3x3 matrices'''
 
         return [
@@ -103,7 +111,7 @@ class INSMechanization:
         ]
 
     @staticmethod
-    def matvec(m, v):
+    def matvec(m: list[list[float]], v: list[float]) -> list[float]:
         '''3x3 matrix times a 3x1 vector (passed in with shape (3,))'''
 
         v0, v1, v2 = v
@@ -116,7 +124,7 @@ class INSMechanization:
         ]
 
     @staticmethod
-    def matvec4(m, v):
+    def matvec4(m: list[list[float]], v: list[float]) -> list[float]:
         '''4x4 matrix times a 4x1 vector (passed in with shape (4,))'''
 
         v0, v1, v2, v3 = v
@@ -130,7 +138,7 @@ class INSMechanization:
         ]
 
     @staticmethod
-    def T3(m):
+    def T3(m: list[list[float]]) -> list[list[float]]:
         '''Transpose of a 3x3 matrix'''
 
         a, b, c = m[0]
@@ -139,7 +147,7 @@ class INSMechanization:
         return [[a, d, g], [b, e, h], [c, f, i]]
 
     @staticmethod
-    def matprod(A, B):
+    def matprod(A: list[list[float]], B: list[list[float]]) -> list[list[float]]:
         '''Product of 2 3x3 matrices'''
 
         A00, A01, A02 = A[0]
@@ -169,13 +177,13 @@ class INSMechanization:
         ]
 
     @classmethod
-    def get_rotation_matrix(cls, r, p, A):
+    def get_rotation_matrix(cls, r: float, p: float, A: float) -> list[float]:
         '''Compute the rotation matrix to rotate the body frame to the LLF from the Euler angles'''
 
         return cls.matprod(cls.Rz(-A), cls.matprod(cls.Rx(p), cls.Ry(r)))
 
     @staticmethod
-    def matrix_to_quaternion(R):
+    def matrix_to_quaternion(R: list[list[float]]) -> list[float]:
         '''Convert a rotation matrix to a normalized quaternion'''
 
         q4 = sqrt(1 + R[0][0] + R[1][1] + R[2][2]) / 2
@@ -187,7 +195,7 @@ class INSMechanization:
         return [q1 / q_norm, q2 / q_norm, q3 / q_norm, q4 / q_norm]
 
     @staticmethod
-    def quaternion_to_matrix(q):
+    def quaternion_to_matrix(q: list[float]) -> list[list[float]]:
         '''Convert a normalized quaternion to a rotation matrix'''
 
         q1, q2, q3, q4 = q
@@ -209,35 +217,35 @@ class INSMechanization:
         ]
 
     @staticmethod
-    def vec_to_skew(v):
+    def vec_to_skew(v: list[float]) -> list[list[float]]:
         '''Convert a vector to its skew-symmetric representation'''
 
         v1, v2, v3 = v
         return [[0, -v3, v2], [v3, 0, -v1], [-v2, v1, 0]]
 
     @staticmethod
-    def Rx(theta):
+    def Rx(theta: float) -> list[list[float]]:
         '''Returns the rotation matrix about the x-axis by angle theta using the sign convention in Wikipedia'''
         costheta = cos(theta)
         sintheta = sin(theta)
         return [[1, 0, 0], [0, costheta, -sintheta], [0, sintheta, costheta]]
 
     @staticmethod
-    def Ry(theta):
+    def Ry(theta: float) -> list[list[float]]:
         '''Returns the rotation matrix about the x-axis by angle theta using the sign convention in Wikipedia'''
         costheta = cos(theta)
         sintheta = sin(theta)
         return [[costheta, 0, sintheta], [0, 1, 0], [-sintheta, 0, costheta]]
 
     @staticmethod
-    def Rz(theta):
+    def Rz(theta: float) -> list[list[float]]:
         '''Returns the rotation matrix about the z-axis by angle theta using the sign convention in Wikipedia'''
         costheta = cos(theta)
         sintheta = sin(theta)
         return [[costheta, -sintheta, 0], [sintheta, costheta, 0], [0, 0, 1]]
 
     @staticmethod
-    def gravity(lat, h):
+    def gravity(lat: float, h: float) -> float:
         '''Compute the gravity vector given the latitude and height'''
 
         sin_phi_sq = sin(lat) ** 2
@@ -248,7 +256,7 @@ class INSMechanization:
         )
 
     @classmethod
-    def radii_of_curvature(cls, lat):
+    def radii_of_curvature(cls, lat: float) -> tuple[float]:
         '''
         Compute the radii of curvature of the Earth at the given latitude.
         WGS84 parameters are used by default.
@@ -258,7 +266,9 @@ class INSMechanization:
         M = N * (1 - cls.e_squared) / one_minus_e_sq_sin_phi_sq
         return N, M
 
-    def compensate_errors_and_compute_params(self, acc, omega, return_params=True):
+    def compensate_errors_and_compute_params(
+        self, acc: list[float], omega: list[float], return_params: bool = True
+    ) -> tuple[(list[float],) * 2] | tuple[(list[float],) * 2, (float,) * 3]:
         '''Compensate for deterministic errors and compute the Earth parameters'''
 
         # Compute gravity
@@ -281,7 +291,7 @@ class INSMechanization:
         N, M = self.radii_of_curvature(self.lat)
         return acc, omega, g, N, M
 
-    def align(self, acc, omega, timestamp):
+    def align(self, acc: list[float], omega: list[float], timestamp: float) -> None:
         '''Compute the alignment of the IMU'''
 
         if self.alignment_complete:
@@ -334,7 +344,7 @@ class INSMechanization:
             # Flag alignment as complete
             self.alignment_complete = True
 
-    def angular_velocity_compensation(self, N, M, omega, delta_t):
+    def angular_velocity_compensation(self, N: float, M: float, omega: list[float], delta_t: float) -> list[float]:
         '''Compensate for the LLF transportation rate and the Earth's rotation'''
 
         # Compute the rotation between the inertial frame and LLF as seen in the body frame
@@ -355,8 +365,10 @@ class INSMechanization:
         theta_blb = [theta_bib[0] - theta_lib[0], theta_bib[1] - theta_lib[1], theta_bib[2] - theta_lib[2]]
         return theta_blb
 
-    def attitude_integration(self, d_theta_x, d_theta_y, d_theta_z):
+    def attitude_integration(self, d_theta: list[float]) -> None:
         '''Update the quaternion and rotation matrices and compute roll, pitch, and azimuth'''
+
+        d_theta_x, d_theta_y, d_theta_z = d_theta
 
         # Update the quaternion based on the angular increments
         quat_update_matrix = [
@@ -383,7 +395,7 @@ class INSMechanization:
         self.pitch = atan(self.R_b2l[2][1] / sqrt(self.R_b2l[0][1] ** 2 + self.R_b2l[1][1] ** 2))
         self.azimuth = atan(self.R_b2l[0][1] / self.R_b2l[1][1])
 
-    def v_and_r_integration(self, acc, delta_t, g, N, M):
+    def v_and_r_integration(self, acc: list[float], delta_t: float, g: float, N: float, M: float) -> None:
         '''Compute the velocity increments and update the LLF velocity and the position'''
 
         # Rotate acceleration to the LLF
@@ -447,7 +459,7 @@ class INSMechanization:
         # Save the new LLF velocity
         self.v_llf = new_v_llf
 
-    def process_measurement(self, measurement):
+    def process_measurement(self, measurement: list[float]) -> None:
         '''Process a measurement from the IMU'''
 
         # In case we get a non-zero start time, shift the time steps back to the time since the first measurment
@@ -472,8 +484,7 @@ class INSMechanization:
         theta_blb = self.angular_velocity_compensation(N, M, omega, delta_t)
 
         # Integrate to determine attitude (roll, pitch, azimuth)
-        d_theta_x, d_theta_y, d_theta_z = theta_blb
-        self.attitude_integration(d_theta_x, d_theta_y, d_theta_z)
+        self.attitude_integration(theta_blb)
 
         # Integrate to update position and LLF velocity
         self.v_and_r_integration(acc, delta_t, g, N, M)
@@ -485,7 +496,9 @@ class INSMechanization:
         self.position_errors[1] += self.v_llf[1] * delta_t
         self.position_errors[2] += self.v_llf[2] * delta_t
 
-    def get_params(self, get_labels=False, degrees=True):
+    def get_params(
+        self, get_labels: bool = False, degrees: bool = True
+    ) -> tuple[(str,) * 14] | tuple[(float,) * 13, bool]:
         '''
         Return the current navigation parameters
 
@@ -579,11 +592,11 @@ def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
         plt.show()
 
 
-def main():
+def main(save_plots=False, save_results_csv=False):
     '''Run the mechanization and plot the results'''
+
     import csv
     from time import perf_counter
-    from math import pi
     import numpy as np
 
     # Read the data
@@ -635,11 +648,12 @@ def main():
         results.append(INS.get_params())
     print(f'Mechanization completed in {perf_counter() - t0:.3f} seconds')
 
-    # # Save the results in csv format
-    # with open('results.csv', 'w', newline='') as f:
-    #     writer = csv.writer(f)
-    #     writer.writerow(INS.get_params(get_labels=True))
-    #     writer.writerows(results)
+    # Save the results in csv format
+    if save_results_csv:
+        with open('results.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(INS.get_params(get_labels=True))
+            writer.writerows(results)
 
     # Exclude results during alignment
     results = np.array([r[:-1] for r in results if not r[-1]])
@@ -655,7 +669,7 @@ def main():
         ((51.07, 51.08), (-114.134, -114.128), (1100, 1350)),
         6,
         'img/position.png',
-        False,
+        save_plots,
     )
 
     # Plot the position errors
@@ -666,7 +680,7 @@ def main():
         ((0, 400), (-1000, 0), (0, 200)),
         6,
         'img/position_errors.png',
-        False,
+        save_plots,
     )
 
     # Plot the velocity errors
@@ -677,7 +691,7 @@ def main():
         ((0, 1.2), (-3.5, 0), (0, 0.6)),
         (7, 8, 7),
         'img/velocity_errors.png',
-        False,
+        save_plots,
     )
     # Plot the attitude errors
     plot_results(
@@ -687,7 +701,7 @@ def main():
         ((-0.008, 0.004), (0, 0.06), (-0.02, 0)),
         (7, 7, 6),
         'img/attitude_erros.png',
-        False,
+        save_plots,
     )
 
 
