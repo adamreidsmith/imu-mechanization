@@ -58,13 +58,13 @@ class INSMechanization:
         self.position_errors = np.zeros((3, 1))  # errors in position in the initial LLF
 
     @classmethod
-    def get_rotation_matrix(cls, r, p, A):
+    def get_rotation_matrix(cls, r: float, p: float, A: float) -> np.ndarray:
         '''Compute the rotation matrix to rotate the body frame to the LLF from the Euler angles'''
 
         return cls.Rz(-A) @ cls.Rx(p) @ cls.Ry(r)
 
     @staticmethod
-    def matrix_to_normalized_quaternion(R):
+    def matrix_to_normalized_quaternion(R: np.ndarray) -> np.ndarray:
         '''Convert a rotation matrix to a normalized quaternion'''
 
         q4 = sqrt(1 + R[0, 0] + R[1, 1] + R[2, 2]) / 2
@@ -76,7 +76,7 @@ class INSMechanization:
         return np.array([[q1 / q_norm], [q2 / q_norm], [q3 / q_norm], [q4 / q_norm]])
 
     @staticmethod
-    def quaternion_to_matrix(q):
+    def quaternion_to_matrix(q: np.ndarray) -> np.ndarray:
         '''Convert a normalized quaternion to a rotation matrix'''
 
         q = q.reshape(4)
@@ -97,14 +97,14 @@ class INSMechanization:
         )
 
     @staticmethod
-    def vec_to_skew(v):
+    def vec_to_skew(v: np.ndarray) -> np.ndarray:
         '''Convert a vector to its skew-symmetric representation'''
 
         v1, v2, v3 = v.reshape(3)
         return np.array([[0, -v3, v2], [v3, 0, -v1], [-v2, v1, 0]])
 
     @staticmethod
-    def Rx(theta):
+    def Rx(theta: float) -> np.ndarray:
         '''Returns the rotation matrix about the x-axis by angle theta using the sign convention in Wikipedia'''
 
         costheta = cos(theta)
@@ -112,7 +112,7 @@ class INSMechanization:
         return np.array([[1, 0, 0], [0, costheta, -sintheta], [0, sintheta, costheta]])
 
     @staticmethod
-    def Ry(theta):
+    def Ry(theta: float) -> np.ndarray:
         '''Returns the rotation matrix about the y-axis by angle theta using the sign convention in Wikipedia'''
 
         costheta = cos(theta)
@@ -120,7 +120,7 @@ class INSMechanization:
         return np.array([[costheta, 0, sintheta], [0, 1, 0], [-sintheta, 0, costheta]])
 
     @staticmethod
-    def Rz(theta):
+    def Rz(theta: float) -> np.ndarray:
         '''Returns the rotation matrix about the z-axis by angle theta using the sign convention in Wikipedia'''
 
         costheta = cos(theta)
@@ -128,7 +128,7 @@ class INSMechanization:
         return np.array([[costheta, -sintheta, 0], [sintheta, costheta, 0], [0, 0, 1]])
 
     @staticmethod
-    def gravity(lat, h):
+    def gravity(lat: float, h: float) -> float:
         '''Compute the gravity vector given the latitude and height'''
 
         A = (
@@ -143,7 +143,7 @@ class INSMechanization:
         return A[0] * (1 + A[1] * sin_phi_sq + A[2] * sin_phi_sq**2) + (A[3] + A[4] * sin_phi_sq) * h + A[5] * h**2
 
     @classmethod
-    def radii_of_curvature(cls, lat):
+    def radii_of_curvature(cls, lat: float) -> tuple[float]:
         '''
         Compute the radii of curvature of the Earth at the given latitude.
         WGS84 parameters are used by default.
@@ -153,7 +153,9 @@ class INSMechanization:
         M = N * (1 - cls.e_squared) / one_minus_e_sq_sin_phi_sq
         return N, M
 
-    def compensate_errors_and_compute_params(self, acc, omega, return_params=True):
+    def compensate_errors_and_compute_params(
+        self, acc: np.ndarray, omega: np.ndarray, return_params: bool = True
+    ) -> tuple[(np.ndarray,) * 2] | tuple[(np.ndarray,) * 2, (float,) * 3]:
         '''Compensate for deterministic errors and compute the Earth parameters'''
 
         # Compute gravity
@@ -173,7 +175,7 @@ class INSMechanization:
         N, M = self.radii_of_curvature(self.lat)
         return acc, omega, g, N, M
 
-    def align(self, acc, omega, timestamp):
+    def align(self, acc: np.ndarray, omega: np.ndarray, timestamp: float) -> None:
         '''Compute the alignment of the IMU'''
 
         if self.alignment_complete:
@@ -216,7 +218,7 @@ class INSMechanization:
             # Flag alignment as complete
             self.alignment_complete = True
 
-    def angular_velocity_compensation(self, N, M, omega, delta_t):
+    def angular_velocity_compensation(self, N: float, M: float, omega: np.ndarray, delta_t: float) -> np.ndarray:
         '''Compensate for the LLF transportation rate and the Earth's rotation'''
 
         # Compute the rotation between the inertial frame and LLF as seen in the body frame
@@ -235,8 +237,10 @@ class INSMechanization:
         theta_blb = theta_bib - theta_lib
         return theta_blb
 
-    def attitude_integration(self, d_theta_x, d_theta_y, d_theta_z):
+    def attitude_integration(self, d_theta: np.ndarray) -> None:
         '''Update the quaternion and rotation matrices and compute roll, pitch, and azimuth'''
+
+        d_theta_x, d_theta_y, d_theta_z = d_theta
 
         # Update the quaternion based on the angular increments
         quat_update_matrix = np.array(
@@ -260,7 +264,7 @@ class INSMechanization:
         self.pitch = atan(self.R_b2l[2, 1] / sqrt(self.R_b2l[0, 1] ** 2 + self.R_b2l[1, 1] ** 2))
         self.azimuth = atan(self.R_b2l[0, 1] / self.R_b2l[1, 1])
 
-    def v_and_r_integration(self, acc, delta_t, g, N, M):
+    def v_and_r_integration(self, acc: np.ndarray, delta_t: float, g: float, N: float, M: float) -> None:
         '''Compute the velocity increments and update the LLF velocity and the position'''
 
         # Compute omega_lel in skew-symmetric form
@@ -297,7 +301,7 @@ class INSMechanization:
         # Save the new LLF velocity
         self.v_llf = new_v_llf
 
-    def process_measurement(self, measurement):
+    def process_measurement(self, measurement: np.ndarray) -> None:
         '''Process a measurement from the IMU'''
 
         # In case we get a non-zero start time, shift the time steps back to the time since the first measurment
@@ -322,8 +326,7 @@ class INSMechanization:
         theta_blb = self.angular_velocity_compensation(N, M, omega, delta_t)
 
         # Integrate to determine attitude (roll, pitch, azimuth)
-        d_theta_x, d_theta_y, d_theta_z = theta_blb.reshape(3)
-        self.attitude_integration(d_theta_x, d_theta_y, d_theta_z)
+        self.attitude_integration(theta_blb.reshape(3))
 
         # Integrate to update position and LLF velocity
         self.v_and_r_integration(acc, delta_t, g, N, M)
@@ -333,7 +336,9 @@ class INSMechanization:
         # This is a reasonable assumption for this project as the IMU is stationary
         self.position_errors += self.v_llf * delta_t
 
-    def get_params(self, get_labels=False, degrees=True):
+    def get_params(
+        self, get_labels: bool = False, degrees: bool = True
+    ) -> tuple[(str,) * 14] | tuple[(float,) * 13, bool]:
         '''
         Return the current navigation parameters
 
@@ -383,7 +388,15 @@ class INSMechanization:
         )
 
 
-def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
+def plot_results(
+    timestamps: np.ndarray,
+    data: np.ndarray,
+    y_labels: list,
+    y_lims: list,
+    y_ticks: list,
+    title: str,
+    save: bool = True,
+) -> None:
     '''Helper function to plot results'''
 
     # If necessary, import the required modules
@@ -424,7 +437,7 @@ def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
         plt.show()
 
 
-def main():
+def main(save_plots: bool = False, save_results_csv: bool = False) -> None:
     '''Run the mechanization and plot the results'''
     import csv
     import time
@@ -478,11 +491,12 @@ def main():
         results.append(INS.get_params())
     print(f'Mechanization completed in {time.perf_counter() - t0:.3f} seconds')
 
-    # # Save the results in csv format
-    # with open('results.csv', 'w', newline='') as f:
-    #     writer = csv.writer(f)
-    #     writer.writerow(INS.get_params(get_labels=True))
-    #     writer.writerows(results)
+    # Save the results in csv format
+    if save_results_csv:
+        with open('results.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(INS.get_params(get_labels=True))
+            writer.writerows(results)
 
     # Exclude results during alignment
     results = np.array([r[:-1] for r in results if not r[-1]])
@@ -498,7 +512,7 @@ def main():
         ((51.07, 51.08), (-114.134, -114.128), (1100, 1350)),
         6,
         'img/position.png',
-        True,
+        save_plots,
     )
 
     # Plot the position errors
@@ -509,7 +523,7 @@ def main():
         ((0, 400), (-1000, 0), (0, 200)),
         6,
         'img/position_errors.png',
-        True,
+        save_plots,
     )
 
     # Plot the velocity errors
@@ -520,7 +534,7 @@ def main():
         ((0, 1.2), (-3.5, 0), (0, 0.6)),
         (7, 8, 7),
         'img/velocity_errors.png',
-        True,
+        save_plots,
     )
 
     # Plot the attitude errors
@@ -531,7 +545,7 @@ def main():
         ((-0.008, 0.004), (0, 0.06), (-0.02, 0)),
         (7, 7, 6),
         'img/attitude_erros.png',
-        True,
+        save_plots,
     )
 
 
