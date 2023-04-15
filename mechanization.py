@@ -28,34 +28,36 @@ class INSMechanization:
         gyro_no: np.ndarray = np.zeros((3, 3)),  # gyro non-orthogonality
         alignment_time: float = 0,  # alignment time in seconds
     ) -> None:
-        self.h = h0
-        self.lat = lat0
-        self.long = long0
-        self.accel_bias = accel_bias
-        self.gyro_bias = gyro_bias
-        accel_sf = accel_sf * np.eye(3) if isinstance(accel_sf, (float, int)) else accel_sf
-        gyro_sf = gyro_sf * np.eye(3) if isinstance(gyro_sf, (float, int)) else gyro_sf
-        self.accel_inv_error_matrix = np.linalg.inv(np.eye(3) + accel_sf + accel_no)
-        self.gyro_inv_error_matrix = np.linalg.inv(np.eye(3) + gyro_sf + gyro_no)
-        self.quat = None  # rotation quaternion; inititalized when alignment completes
-        self.R_b2l = None  # rotation matrix; inititalized when alignment completes
-        self.v_llf = np.zeros((3, 1))  # initial ENU velocities
-        self.prev_delta_v_llf = np.zeros((3, 1))  # change in v in LLF at previous t
-        self.prev_time = 0  # previous time, used to determine delta_t
-        self.roll = self.pitch = self.azimuth = 0  # initialize to store orientation
-        self.timestamp = 0  # store the current timestamp
-        self.start_time = None  # start time of the mechanization
+        self.h: float = h0
+        self.lat: float = lat0
+        self.long: float = long0
+        self.accel_bias: float | Callable = accel_bias
+        self.gyro_bias: float = gyro_bias
+        accel_sf: float | int | np.ndarray = accel_sf * np.eye(3) if isinstance(accel_sf, (float, int)) else accel_sf
+        gyro_sf: float | int | np.ndarray = gyro_sf * np.eye(3) if isinstance(gyro_sf, (float, int)) else gyro_sf
+        self.accel_inv_error_matrix: np.ndarray = np.linalg.inv(np.eye(3) + accel_sf + accel_no)
+        self.gyro_inv_error_matrix: np.ndarray = np.linalg.inv(np.eye(3) + gyro_sf + gyro_no)
+        self.quat: np.ndarray | None = None  # rotation quaternion; inititalized when alignment completes
+        self.R_b2l: np.ndarray | None = None  # rotation matrix; inititalized when alignment completes
+        self.v_llf: np.ndarray = np.zeros((3, 1))  # initial ENU velocities
+        self.prev_delta_v_llf: np.ndarray = np.zeros((3, 1))  # change in v in LLF at previous t
+        self.prev_time: float = 0  # previous time, used to determine delta_t
+        self.roll: float = 0
+        self.pitch: float = 0
+        self.azimuth: float = 0
+        self.timestamp: float = 0  # store the current timestamp
+        self.start_time: float | None = None  # start time of the mechanization; initialized on the first iteration
 
         # Alignment specific attributes
-        self.alignment_time = alignment_time
-        self.alignment_complete = False  # flag to determine if alignment is completed
-        self.alignment_acc_mean = np.zeros((3, 1))  # running mean for accel alignment
-        self.alignment_omega_mean = np.zeros((3, 1))  # running mean for gyro alignment
-        self.alignment_it = 0  # couter to keep track of alignment iterations
+        self.alignment_time: float | int = alignment_time
+        self.alignment_complete: bool = False  # flag to determine if alignment is completed
+        self.alignment_acc_mean: np.ndarray = np.zeros((3, 1))  # running mean for accel alignment
+        self.alignment_omega_mean: np.ndarray = np.zeros((3, 1))  # running mean for gyro alignment
+        self.alignment_it: int = 0  # couter to keep track of alignment iterations
 
         # Values for error tracking
-        self.initial_attitude = None  # initial roll, pitch, azimuth as computed by alignment
-        self.position_errors = np.zeros((3, 1))  # errors in position in the initial LLF
+        self.initial_attitude: np.ndarray | None = None  # initial roll, pitch, azimuth as computed by alignment
+        self.position_errors: np.ndarray = np.zeros((3, 1))  # errors in position in the initial LLF
 
     @classmethod
     def get_rotation_matrix(cls, r: float, p: float, A: float) -> np.ndarray:
@@ -439,6 +441,7 @@ def plot_results(
 
 def main(save_plots: bool = False, save_results_csv: bool = False) -> None:
     '''Run the mechanization and plot the results'''
+
     import csv
     import time
 
