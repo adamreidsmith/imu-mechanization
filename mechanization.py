@@ -388,6 +388,7 @@ def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
 
     # If necessary, import the required modules
     if 'plt' not in globals():
+        global plt, ScalarFormatter, AutoMinorLocator
         import matplotlib.pyplot as plt
         from matplotlib.ticker import ScalarFormatter, AutoMinorLocator
 
@@ -427,8 +428,6 @@ def main():
     '''Run the mechanization and plot the results'''
     import csv
     import time
-    from math import pi
-    import numpy as np
 
     # Read the data
     data = np.fromfile('./project_data.BIN').reshape([-1, 7])

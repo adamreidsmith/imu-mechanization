@@ -1,5 +1,4 @@
 from math import copysign, sqrt, sin, cos, tan, asin, atan, pi
-from time import perf_counter
 from typing import Callable
 
 
@@ -541,10 +540,12 @@ def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
 
     # If necessary, import the required modules
     if 'plt' not in globals():
+        global plt, ScalarFormatter, AutoMinorLocator
         import matplotlib.pyplot as plt
         from matplotlib.ticker import ScalarFormatter, AutoMinorLocator
-    if 'np' not in globals():
-        import numpy as np
+    if 'linspace' not in globals():
+        global linspace
+        from numpy import linspace
 
     plt.figure(figsize=(11, 9))
     for i in range(3):
@@ -553,7 +554,7 @@ def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
         plt.plot(timestamps, data[:, i], linewidth=1)
 
         # Set the axis ticks
-        plt.yticks(np.linspace(*y_lims[i], y_ticks if isinstance(y_ticks, int) else y_ticks[i]))
+        plt.yticks(linspace(*y_lims[i], y_ticks if isinstance(y_ticks, int) else y_ticks[i]))
         plt.xticks(range(0, 1000, 100))
 
         # Format the grid lines
@@ -581,7 +582,7 @@ def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
 def main():
     '''Run the mechanization and plot the results'''
     import csv
-    import time
+    from time import perf_counter
     from math import pi
     import numpy as np
 
@@ -628,11 +629,11 @@ def main():
 
     # Run the module one measurement at a time
     results = []
-    t0 = time.perf_counter()
+    t0 = perf_counter()
     for measurement in data:
         INS.process_measurement(measurement)
         results.append(INS.get_params())
-    print(f'Mechanization completed in {time.perf_counter() - t0:.3f} seconds')
+    print(f'Mechanization completed in {perf_counter() - t0:.3f} seconds')
 
     # # Save the results in csv format
     # with open('results.csv', 'w', newline='') as f:
