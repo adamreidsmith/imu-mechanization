@@ -548,7 +548,7 @@ class INSMechanization:
         )
 
 
-def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
+def plot_results(timestamps, data, y_labels, y_lims, y_ticks, path, title, save=True):
     '''Helper function to plot results'''
 
     # If necessary, import the required modules
@@ -585,10 +585,12 @@ def plot_results(timestamps, data, y_labels, y_lims, y_ticks, title, save=True):
 
         # Format the y-axis tick labels to remove the constant
         ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False, useMathText=True))
+    if not save:
+        plt.suptitle(title)
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.25)
     if save:
-        plt.savefig(title, dpi=300)
+        plt.savefig(path, dpi=300)
     else:
         plt.show()
 
@@ -598,10 +600,10 @@ def main(save_plots=False, save_results_csv=False):
 
     import csv
     from time import perf_counter
-    import numpy as np
+    from numpy import fromfile, zeros, array
 
     # Read the data
-    data = np.fromfile('./project_data.BIN').reshape([-1, 7])
+    data = fromfile('./project_data.BIN').reshape([-1, 7])
 
     # IMU parameters, converted to SI base units
     gyro_bias = 0.1 * pi / 180 / 3600  # rad / s
@@ -617,8 +619,8 @@ def main(save_plots=False, save_results_csv=False):
 
     # Set the scale factor and non-orthogoanlity matrices
     # scale_factor = np.eye(3)
-    scale_factor = np.zeros((3, 3))
-    nonorthogonality = np.zeros((3, 3))
+    scale_factor = zeros((3, 3))
+    nonorthogonality = zeros((3, 3))
 
     # Initial position (converted to radians) and velocity
     lat = 51.07995352 * pi / 180  # rad
@@ -657,7 +659,7 @@ def main(save_plots=False, save_results_csv=False):
             writer.writerows(results)
 
     # Exclude results during alignment
-    results = np.array([r[:-1] for r in results if not r[-1]])
+    results = array([r[:-1] for r in results if not r[-1]])
 
     # Shift the timestamps to start at 0
     timestamps = results[:, 0] - results[0, 0]
@@ -670,6 +672,7 @@ def main(save_plots=False, save_results_csv=False):
         ((51.07, 51.08), (-114.134, -114.128), (1100, 1350)),
         6,
         'img/position.png',
+        'Position',
         save_plots,
     )
 
@@ -681,6 +684,7 @@ def main(save_plots=False, save_results_csv=False):
         ((0, 400), (-1000, 0), (0, 200)),
         6,
         'img/position_errors.png',
+        'Positon Errors',
         save_plots,
     )
 
@@ -692,16 +696,18 @@ def main(save_plots=False, save_results_csv=False):
         ((0, 1.2), (-3.5, 0), (0, 0.6)),
         (7, 8, 7),
         'img/velocity_errors.png',
+        'Velocity Errors',
         save_plots,
     )
     # Plot the attitude errors
     plot_results(
         timestamps,
-        results[:, 7:10] - np.array(INS.initial_attitude) * RAD_TO_DEG,
+        results[:, 7:10] - array(INS.initial_attitude) * RAD_TO_DEG,
         (r'$\delta r$ (deg)', r'$\delta p$ (deg)', r'$\delta A$ (deg)'),
         ((-0.008, 0.004), (0, 0.06), (-0.02, 0)),
         (7, 7, 6),
         'img/attitude_erros.png',
+        'Attitude Errors',
         save_plots,
     )
 

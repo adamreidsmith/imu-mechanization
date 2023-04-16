@@ -396,7 +396,8 @@ def plot_results(
     y_labels: list,
     y_lims: list,
     y_ticks: list,
-    title: str,
+    path: str,
+    title: str = '',
     save: bool = True,
 ) -> None:
     '''Helper function to plot results'''
@@ -432,10 +433,12 @@ def plot_results(
 
         # Format the y-axis tick labels to remove the constant
         ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False, useMathText=True))
+    if not save:
+        plt.suptitle(title)
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.25)
     if save:
-        plt.savefig(title, dpi=300)
+        plt.savefig(path, dpi=300)
     else:
         plt.show()
 
@@ -516,6 +519,7 @@ def main(save_plots: bool = False, save_results_csv: bool = False) -> None:
         ((51.07, 51.08), (-114.134, -114.128), (1100, 1350)),
         6,
         'img/position.png',
+        'Position',
         save_plots,
     )
 
@@ -527,6 +531,7 @@ def main(save_plots: bool = False, save_results_csv: bool = False) -> None:
         ((0, 400), (-1000, 0), (0, 200)),
         6,
         'img/position_errors.png',
+        'Position Errors',
         save_plots,
     )
 
@@ -538,6 +543,7 @@ def main(save_plots: bool = False, save_results_csv: bool = False) -> None:
         ((0, 1.2), (-3.5, 0), (0, 0.6)),
         (7, 8, 7),
         'img/velocity_errors.png',
+        'Velocity Errors',
         save_plots,
     )
 
@@ -549,9 +555,10 @@ def main(save_plots: bool = False, save_results_csv: bool = False) -> None:
         ((-0.008, 0.004), (0, 0.06), (-0.02, 0)),
         (7, 7, 6),
         'img/attitude_errors.png',
+        'Attitude Errors',
         save_plots,
     )
 
 
 if __name__ == '__main__':
-    main(save_plots=True, save_results_csv=True)
+    main(save_plots=False, save_results_csv=False)
