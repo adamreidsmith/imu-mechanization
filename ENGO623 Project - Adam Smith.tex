@@ -39,7 +39,7 @@
 \end{titlepage}
 
 \section{Introduction}
-In this project, we implement a Python module for mechanization of IMU data in the local level frame.  The module performs alignment for a user-specified time and then begins computing navigation information. Errors in attitude, position, and velocity are tracked throughout the mechanization and reported at the end.
+In this project, we implement a Python module for mechanization of IMU data in the local level frame (LLF).  The module performs alignment for a user-specified time and then begins computing navigation information. Errors in attitude, position, and velocity are tracked throughout the mechanization and reported at the end.
 
 \section{Mechanization Module Implementation}
 
@@ -69,10 +69,10 @@ The mechanization can be run using the \pyth{process_measurement} method of the 
 
 At any time, navigation parameters can be obtained through the \pyth{get_params} method.  This method returns the time, position, velocity, and attitude information as computed by the mechanization module at the most recent time step, as well as whether or not alignment has completed.  If the argument \pyth{degrees} is set to true, values in radians will be converted to degrees before being returned.
 
-The following sections describe the implementation of the mechanization class in more detail.
+The following sections describe the implementation of the mechanization class in detail.
 
 \subsection{Alignment}
-When a measurement is received in the \pyth{process_measurement} method, we check whether or not alignment has completed by checking the \pyth{alignment_complete} flag, which is initially set to False.  If alignment is not complete, the \pyth{align} method is called, passing in the current measurement.  The align method then uses the current timestamp (shifted, if necessary, such that the first measurement received always has time 0) and the user-specified alignment time to determine whether or not alignment will be complete in this iteration.  If not, align then calls the \pyth{compensate_errors_and_compute_params} method (described in section 2.3) to compensate for deterministic errors in the accelerometer and gyroscope measurements.  The compensated values are then added to running totals, and a counter describing the number of times the \pyth{align} method has been called is incremented.  No further computation occurs.
+When a measurement is received in the \pyth{process_measurement} method, we first check whether or not alignment has completed by checking the \pyth{alignment_complete} flag, which is initially set to False.  If alignment is not complete, the \pyth{align} method is called, passing in the current measurement.  The align method then uses the current timestamp (shifted, if necessary, such that the first measurement received always has time 0) and the user-specified alignment time to determine whether or not alignment will be complete in this iteration.  If not, align then calls the \pyth{compensate_errors_and_compute_params} method (described in section 2.3) to compensate for deterministic errors in the accelerometer and gyroscope measurements.  The compensated values are then added to running totals, and a counter describing the number of times the \pyth{align} method has been called is incremented.  No further computation occurs.
 
 Once \pyth{align} determines that alignment is complete, it sets the \pyth{alignment_complete} flag to True, then computes the mean of the measurements received during the alignment time by dividing the totals by the number of measurements received.  The initial roll and pitch angles of the IMU are then calculated via
 \begin{equation}
@@ -89,13 +89,13 @@ to the mean angular velocity measurement $\omega$
 \begin{equation}
 \bar \omega=R_b^{level}\omega
 \end{equation}
-where $R_x$ and $R_y$ are rotation matrices about the $x$- and $y$- axes, respectively, using the sign convention outlined in the \href{https://en.wikipedia.org/wiki/Rotation_matrix}{Wikipedia page on rotation matrices}. 
+where $R_x$ and $R_y$ are rotation matrices about the $x$- and $y$-axes, respectively, using the sign convention outlined in the \href{https://en.wikipedia.org/wiki/Rotation_matrix}{Wikipedia page on rotation matrices}. 
 The initial azimuth can then be calculated as 
 \begin{equation}
 A=\tan^{-1}\frac{-\bar\omega_x}{\bar\omega_y}.
 \end{equation}
 
-The initial Euler angles are then used to compute the rotation of the IMU w.r.t. the LLF as
+The initial Euler angles are used to compute the rotation of the IMU w.r.t. the LLF as
 %$$ R_b^l=\begin{pmatrix}
 %\cos A \cos r + \sin A \sin r \sin p & \sin A \cos p & \cos A \sin r - \sin A \cos r \sin p \\
 %\cos A \sin r \sin p - \sin A \cos r & \cos A \cos p & -\sin A \sin r - \cos A \cos r \sin p \\
@@ -154,7 +154,7 @@ where $e$ is the eccentricity of the Earth and $a$ is the semi-major axis.
 
 \subsection{Angular velocity compensation}
 
-After alignment is complete and deterministic errors are corrected, the next step is to compensate for the rotation of the Earth and the movement of the local level frame.  This is necessary since the gyroscope axes in the North and up directions observe part of the Earth's rotation, and the motion of the local level frame causes a change in orientation of the local level frame axes.  Due to these effects, the rotation of the LLF w.r.t. the inertial frame as seen in the body frame is given by 
+After alignment is complete and deterministic errors are corrected, the next step is to compensate for the rotation of the Earth and the movement of the LLF.  This is necessary since the gyroscope axes in the North and up directions observe part of the Earth's rotation, and the motion of the LLF causes a change in orientation of the LLF axes.  Due to these effects, the rotation of the LLF w.r.t. the inertial frame as seen in the body frame is given by 
 \begin{equation}
 \omega_{il}^b=R_l^b\begin{pmatrix}
 \frac{-V^n}{M+h} \\[.1cm]
@@ -171,9 +171,9 @@ where $\omega$ is the corrected gyroscope measurement.
 The \pyth{angular_velocity_compensation} method performs the above calculation and returns $\theta_{lb}^b$ as a NumPy array.
 
 \subsection{Attitude integration}
-After angular velocity compensation, attitude is then updated in the \pyth{attitude_integration} method. First, the quaternion update matrix $U$ is computed as
+After angular velocity compensation, attitude is then updated in the \pyth{attitude_integration} method. First, the quaternion is updated using the matrix
 \begin{equation}
-U=\begin{pmatrix}
+U:=\begin{pmatrix}
 0 & \Delta\theta_z & -\Delta\theta_y & \Delta\theta_x \\
 -\Delta\theta_z & 0 & \Delta\theta_x & \Delta\theta_y \\
 \Delta\theta_y & -\Delta\theta_x & 0 & \Delta\theta_z \\
@@ -184,8 +184,9 @@ where the $\Delta\theta_i$ are the components of $\theta_{lb}^b$ as returned by 
 \begin{equation}
 Q_t=Q_{t-1}+\frac12UQ_{t-1}
 \end{equation}
-and, if necessary, normalized by dividing component-wise by its Euclidean norm. Using the method described in section 2.2, the updated orthogonal rotation matrix $R_b^l$ can then be computed from $Q$.
-The updated roll, pitch, and azimuth can be determined from $R_b^l$ via 
+and, if necessary, normalized by dividing component-wise by its Euclidean norm. Using equation (9), the updated orthogonal rotation matrix $R_b^l$ can be computed from $Q$.
+
+The updated roll, pitch, and azimuth are determined from $R_b^l$ via 
 \begin{equation}
 r=\tan^{-1}\frac{-r_{31}}{r_{33}}
 \end{equation}
@@ -247,7 +248,7 @@ The steps to mechanization with the \pyth{INSMechanization} class can be summari
 	\item Instantiate the \pyth{INSMechanization} class, passing in the initial position, IMU error parameters, and alignment time.
 	\item Call the \pyth{process_measurement} method with each IMU update, passing in the timestamp and accelerometer and gyroscope measurements.  This method functions as follows:
 	\begin{enumerate}[i.]
-		\item Call \pyth{compensate_errors_and_compute_params} to correct for deterministic errors in the accelerometer and gyroscope measurements and compute Earth parameters at the current latitude.
+		\item Call \pyth{compensate_errors_and_compute_params} to correct for deterministic errors in the accelerometer and gyroscope measurements and compute Earth parameters at the current position.
 		\item If alignment is not complete, call the \pyth{align} method and return. This keeps track of the mean acceleration and rotation rate. On the last iteration during the alignment time, the rotation of the body w.r.t. the LLF is computed and \pyth{align} is no longer called.
 		\item Compensate the angular velocity measurement for the rotation of the Earth and the movement of the LLF and compute the angular changes of the body.  This is performed by the \pyth{angular_velocity_compensation} method.
 		\item Update the rotation matrix and quaternion describing the rotation of the body w.r.t. the LLF, and compute the updated roll, pitch, and azimuth with the \pyth{attitude_integration} method.
@@ -261,8 +262,8 @@ Several other methods are provided in the \pyth{INSMechanization} class to facil
 \begin{itemize}
 	\item \pyth{@staticmethod gravity(lat, h)} | Returns the gravitational field strength in m/s$^2$ given the latitude in radians and the height above the ellipsoid in meters.
 	\item \pyth{@classmethod radii_of_curvature(cls, lat)} | Returns the radii of curvature of the Earth in the prime vertical $N$ and meridian $M$ directions given the latitude in radians.
-	\item \pyth{@staticmethod vec_to_skew(v)} | Returns the skew-symmetric representation of a the input vector as a NumPy ndarray.
-	\item \pyth{@classmethod get_rotation_matrix(cls, r, p, A)} | Returns the rotation matrix of the body w.r.t. the LLF as a NumPy ndarray given roll, pitch, and azimuth in radians.
+	\item \pyth{@staticmethod vec_to_skew(v)} | Returns the skew-symmetric representation of the input vector as a NumPy array.
+	\item \pyth{@classmethod get_rotation_matrix(cls, r, p, A)} | Returns the rotation matrix of the body w.r.t. the LLF as a NumPy array given roll, pitch, and azimuth in radians.
 	\item \pyth{@staticmethod matrix_to_normalized_quaternion(R)} | Converts a $3\times3$ rotation matrix into a normalized quaternion and returns it as a NumPy array.
 	\item \pyth{@staticmethod quaternion_to_matrix(q)} | Converts a normalized quaternion into a rotation matrix and returns it as a NumPy array.
 	\item \pyth{@staticmethod Rx(theta)} | Compute the rotation matrix describing a rotation about the x-axis by an angle theta in radians.
@@ -279,17 +280,17 @@ A solution to improve the navigation accuracy is to augment the INS provided nav
 
 \begin{figure}[!htbp]
 \centerline{\includegraphics[width=16cm]{img/position.png}}
-\caption{\label{fig:position} Latitude, longitude, and height above the ellipsoid of the IMU as computed by the mechanization module.}
+\caption{\label{fig:position} Latitude $\phi$, longitude $\lambda$, and height above the ellipsoid $h$ of the IMU as computed by the mechanization module.}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centerline{\includegraphics[width=16cm]{img/position_errors.png}}
-\caption{\label{fig:position-errors} Position errors of the IMU in the initial local level frame.}
+\caption{\label{fig:position-errors} Position errors of the IMU in the initial LLF.}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centerline{\includegraphics[width=16cm]{img/velocity_errors.png}}
-\caption{\label{fig:velocity-errors} Velocity errors of the IMU in the local level frame.}
+\caption{\label{fig:velocity-errors} Velocity errors of the IMU in the LLF.}
 \end{figure}
 
 \begin{figure}[!htbp]

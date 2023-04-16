@@ -527,7 +527,7 @@ def main(save_plots: bool = False, save_results_csv: bool = False) -> None:
     plot_results(
         timestamps,
         results[:, 10:],
-        (r'$\delta$ E (m)', r'$\delta$ N (m)', r'$\delta$ Up (m)'),
+        (r'$\delta E$ (m)', r'$\delta N$ (m)', r'$\delta UP$ (m)'),
         ((0, 400), (-1000, 0), (0, 200)),
         6,
         'img/position_errors.png',
