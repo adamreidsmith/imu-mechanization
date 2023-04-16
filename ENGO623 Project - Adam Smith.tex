@@ -13,6 +13,7 @@
 \usepackage{amsmath}
 \usepackage{pythonhighlight}
 \usepackage{enumerate}
+\usepackage[section]{placeins}
 
 %\setcounter{secnumdepth}{0}
 \onehalfspacing
@@ -43,7 +44,7 @@ In this project, we implement a Python module for mechanization of IMU data in t
 \section{Mechanization Module Implementation}
 
 \subsection{The INSMechanization class}
-Mechanization is implemented in the \pyth{INSMechanization} class in the file \pyth{mechanization.py}.  This module is written using the scientific computing package \href{https://numpy.org}{\textit{numpy}} to allow for easy array operations.  To simplify computation, all calculations are performed in SI base or derived units. As such, the module requires all input information to be in SI base or derived units.  
+Mechanization is implemented in the \pyth{INSMechanization} class in the file \pyth{mechanization.py}.  This module is written in Python using the scientific computing package \href{https://numpy.org}{\textit{NumPy}} to allow for easy array operations.  To simplify computation, all calculations are performed in SI base or derived units. As such, the module requires all input information to be in SI base or derived units.  
 
 To initialize the mechanization module, create an instance of the \pyth{INSMechanization} class, passing in the following arguments:
 \begin{itemize}
@@ -52,26 +53,26 @@ To initialize the mechanization module, create an instance of the \pyth{INSMecha
 	\item \pyth{long0} | Float \newline Initial longitude in radians. Required.
 	\item \pyth{accel_bias} | Float or Callable \newline Accelerometer bias in m/s$^2$. If callable, it should compute the accelerometer bias based on the local gravity. Default: 0
 	\item \pyth{gyro_bias} | Float \newline Gyroscope bias in rad/s. Default: 0
-	\item \pyth{accel_sf} | Float or Numpy Array \newline Accelerometer scale factor. Default: 0
-	\item \pyth{gyro_sf} | Float or Numpy Array \newline Gyroscope scale factor. Default: 0
-	\item \pyth{accel_no} | Numpy Array \newline Accelerometer non-orthogonality matrix in radians. Default: $3\times3$ zero matrix
-	\item \pyth{gyro_no} | Numpy Array \newline Gyroscope non-orthogonality matrix in radians. Default: $3\times3$ zero matrix
-	\item \pyth{vrw} | Float \newline Velocity random walk of the accelerometer in m/s$^\frac32$. Default: 0
-	\item \pyth{arw} | Float \newline Angle random walk of the gyroscope in rad/s$^\frac12$. Default: 0
-	\item \pyth{accel_corr_time} | Float \newline Accelerometer correlation time in seconds. Default: 0
-	\item \pyth{gyro_corr_time} | Float \newline Gyroscope correlation time in seconds. Default: 0
-	\item \pyth{accel_bias_instability} | Float or Callable \newline Accelerometer bias instability in m/s$^2$. If callable, it should compute the accelerometer bias based on the local gravity. Default: 0
-	\item \pyth{gyro_bias_instability} | Float \newline Gyroscope bias instability in rad/s. Default: 0
-	\item \pyth{alignment_time} | Float \newline Time duration in seconds to perform alignment before beginning navigation. Default: 0
+	\item \pyth{accel_sf} | Float or NumPy Array \newline Accelerometer scale factor. Default: 0
+	\item \pyth{gyro_sf} | Float or NumPy Array \newline Gyroscope scale factor. Default: 0
+	\item \pyth{accel_no} | NumPy Array \newline Accelerometer non-orthogonality matrix in radians. Default: $3\times3$ zero matrix
+	\item \pyth{gyro_no} | NumPy Array \newline Gyroscope non-orthogonality matrix in radians. Default: $3\times3$ zero matrix
+	%\item \pyth{vrw} | Float \newline Velocity random walk of the accelerometer in m/s$^\frac32$. Default: 0
+	%\item \pyth{arw} | Float \newline Angle random walk of the gyroscope in rad/s$^\frac12$. Default: 0
+	%\item \pyth{accel_corr_time} | Float \newline Accelerometer correlation time in seconds. Default: 0
+	%\item \pyth{gyro_corr_time} | Float \newline Gyroscope correlation time in seconds. Default: 0
+	%\item \pyth{accel_bias_instability} | Float or Callable \newline Accelerometer bias instability in m/s$^2$. If callable, it should compute the accelerometer bias based on the local gravity. Default: 0
+	%\item \pyth{gyro_bias_instability} | Float \newline Gyroscope bias instability in rad/s. Default: 0
+	\item \pyth{alignment_time} | Float \newline Time duration in seconds to perform alignment before beginning navigation. Default: 120 seconds
 \end{itemize}
-The mechanization can then be run using the \pyth{process_measurement} method of the \pyth{INSMechanization} class.  This method accepts a single argument \pyth{measurement}, which represents a single measurement from the IMU and is a one-dimensional numpy array of length 7 consisting of the current time step in seconds, the x-, y-, and z-gyroscope measurements in rad/s, and the x-, y-, and z-accelerometer measurements in m/s$^2$.  
+The mechanization can be run using the \pyth{process_measurement} method of the \pyth{INSMechanization} class.  This method accepts a single argument \pyth{measurement}, which represents a single measurement from the IMU and is a one-dimensional NumPy array of length 7 consisting of the current time step in seconds, the x-, y-, and z-gyroscope measurements in rad/s, and the x-, y-, and z-accelerometer measurements in m/s$^2$.  
 
 At any time, navigation parameters can be obtained through the \pyth{get_params} method.  This method returns the time, position, velocity, and attitude information as computed by the mechanization module at the most recent time step, as well as whether or not alignment has completed.  If the argument \pyth{degrees} is set to true, values in radians will be converted to degrees before being returned.
 
 The following sections describe the implementation of the mechanization class in more detail.
 
 \subsection{Alignment}
-When a measurement is received in the \pyth{process_measurement} method, we check whether or not alignment has completed by checking the \pyth{alignment_complete} flag, which is initially set to False.  If alignment is not complete, the \pyth{align} method is called, passing in the current measurement.  The align method then uses the current timestamp (adjusted, if necessary, such that the first measurement received always has time 0) and the user-specified alignment time to determine whether or not alignment will be complete in this iteration.  If not, align then calls the \pyth{compensate_errors_and_compute_params} method (described in section 2.3) to compensate for deterministic errors in the accelerometer and gyroscope measurements.  The compensated values are then added to running totals, and a counter describing the number of times the \pyth{align} method has been called is incremented.  No further computation occurs.
+When a measurement is received in the \pyth{process_measurement} method, we check whether or not alignment has completed by checking the \pyth{alignment_complete} flag, which is initially set to False.  If alignment is not complete, the \pyth{align} method is called, passing in the current measurement.  The align method then uses the current timestamp (shifted, if necessary, such that the first measurement received always has time 0) and the user-specified alignment time to determine whether or not alignment will be complete in this iteration.  If not, align then calls the \pyth{compensate_errors_and_compute_params} method (described in section 2.3) to compensate for deterministic errors in the accelerometer and gyroscope measurements.  The compensated values are then added to running totals, and a counter describing the number of times the \pyth{align} method has been called is incremented.  No further computation occurs.
 
 Once \pyth{align} determines that alignment is complete, it sets the \pyth{alignment_complete} flag to True, then computes the mean of the measurements received during the alignment time by dividing the totals by the number of measurements received.  The initial roll and pitch angles of the IMU are then calculated via
 \begin{equation}
@@ -88,7 +89,7 @@ to the mean angular velocity measurement $\omega$
 \begin{equation}
 \bar \omega=R_b^{level}\omega
 \end{equation}
-where $R_x$ and $R_y$ are rotation matrices about the $x$- and $y$- axes, respectively, using the sign convention outlined in the \href{https://en.wikipedia.org/wiki/Rotation_matrix}{Wikipedia page}. 
+where $R_x$ and $R_y$ are rotation matrices about the $x$- and $y$- axes, respectively, using the sign convention outlined in the \href{https://en.wikipedia.org/wiki/Rotation_matrix}{Wikipedia page on rotation matrices}. 
 The initial azimuth can then be calculated as 
 \begin{equation}
 A=\tan^{-1}\frac{-\bar\omega_x}{\bar\omega_y}.
@@ -167,7 +168,7 @@ where $\omega_e$ is the rotation rate of the Earth and $V^e$ and $V^n$ are the v
 \end{equation}
 where $\omega$ is the corrected gyroscope measurement.
 
-The \pyth{angular_velocity_compensation} method performs the above calculation and returns $\theta_{lb}^b$ as a numpy array.
+The \pyth{angular_velocity_compensation} method performs the above calculation and returns $\theta_{lb}^b$ as a NumPy array.
 
 \subsection{Attitude integration}
 After angular velocity compensation, attitude is then updated in the \pyth{attitude_integration} method. First, the quaternion update matrix $U$ is computed as
@@ -219,13 +220,13 @@ respectively.  The static method \pyth{vec_to_skew} converts these vectors to ma
 \begin{equation}
 a^l=R_b^lf^b-2(\Omega_{ie}^l+\Omega_{el}^l)V^l+g^l
 \end{equation}
-where $f^b$ is the corrected accelerometer measurement and $g^l=\begin{pmatrix}0&0&-g(\phi, h)\end{pmatrix}^T$ is the gravitational acceleration in the LLF.  The velocity increment $\Delta V^l$ in the LLF is then obtained by multiplying this acceleration with the time step, and velocity is then updated via
+where $f^b$ is the corrected accelerometer measurement and $g^l=\begin{pmatrix}0&0&-g(\phi, h)\end{pmatrix}^T$ is the gravitational acceleration in the LLF.  The velocity increment $\Delta V^l$ in the LLF is then obtained by multiplying this acceleration with the time step, and velocity is updated via
 \begin{equation}
 V^l_t=V^l_{t-1}+\frac12\left(\Delta V^l_{t-1}+\Delta V^l_t\right)
 \end{equation}
 where $\Delta V^l_0=0$.
 
-Finally, position of the LLF is then updated.  The updated longitude $\lambda$ and latitude $\phi$ are computed as
+Finally, position of the LLF is updated.  The updated longitude $\lambda$ and latitude $\phi$ are computed as
 \begin{equation}
 \lambda_t=\lambda_{t-1}+\frac12\left(\frac{V^e_{t-1}+V^e_t}{(N+h)\cos\phi}\right)\Delta t
 \end{equation}
@@ -238,12 +239,12 @@ and the updated altitude is given by
 h_t=h_{t-1}+\frac12\left(V^u_{t-1}+V^u_t\right)\Delta t.
 \end{equation}
 
-\subsection{Error computation}
+
 
 \subsection{Summary of mechanization implementation}
 The steps to mechanization with the \pyth{INSMechanization} class can be summarized as follows:
 \begin{enumerate}
-	\item Instantiate an instance of the \pyth{INSMechanization} class, passing in the initial position, error parameters, and alignment time.
+	\item Instantiate the \pyth{INSMechanization} class, passing in the initial position, IMU error parameters, and alignment time.
 	\item Call the \pyth{process_measurement} method with each IMU update, passing in the timestamp and accelerometer and gyroscope measurements.  This method functions as follows:
 	\begin{enumerate}[i.]
 		\item Call \pyth{compensate_errors_and_compute_params} to correct for deterministic errors in the accelerometer and gyroscope measurements and compute Earth parameters at the current latitude.
@@ -260,21 +261,48 @@ Several other methods are provided in the \pyth{INSMechanization} class to facil
 \begin{itemize}
 	\item \pyth{@staticmethod gravity(lat, h)} | Returns the gravitational field strength in m/s$^2$ given the latitude in radians and the height above the ellipsoid in meters.
 	\item \pyth{@classmethod radii_of_curvature(cls, lat)} | Returns the radii of curvature of the Earth in the prime vertical $N$ and meridian $M$ directions given the latitude in radians.
-	\item \pyth{@staticmethod vec_to_skew(v)} | Returns the skew-symmetric representation of a the input vector as a numpy ndarray.
-	\item \pyth{@staticmethod get_rotation_matrix(r, p, A)} | Returns the rotation matrix of the body w.r.t. the LLF as a numpy ndarray given roll, pitch, and azimuth in radians.
-	\item \pyth{@staticmethod matrix_to_normalized_quaternion(R)} | Converts a $3\times3$ rotation matrix into a normalized quaternion and returns it as a numpy array.
-	\item \pyth{@staticmethod quaternion_to_matrix(q)} | Converts a normalized quaternion into a rotation matrix and returns it as a numpy array.
+	\item \pyth{@staticmethod vec_to_skew(v)} | Returns the skew-symmetric representation of a the input vector as a NumPy ndarray.
+	\item \pyth{@classmethod get_rotation_matrix(cls, r, p, A)} | Returns the rotation matrix of the body w.r.t. the LLF as a NumPy ndarray given roll, pitch, and azimuth in radians.
+	\item \pyth{@staticmethod matrix_to_normalized_quaternion(R)} | Converts a $3\times3$ rotation matrix into a normalized quaternion and returns it as a NumPy array.
+	\item \pyth{@staticmethod quaternion_to_matrix(q)} | Converts a normalized quaternion into a rotation matrix and returns it as a NumPy array.
+	\item \pyth{@staticmethod Rx(theta)} | Compute the rotation matrix describing a rotation about the x-axis by an angle theta in radians.
+	\item \pyth{@staticmethod Ry(theta)} | Compute the rotation matrix describing a rotation about the y-axis by an angle theta in radians.
+	\item \pyth{@staticmethod Rz(theta)} | Compute the rotation matrix describing a rotation about the z-axis by an angle theta in radians.
 \end{itemize}
 
+\section{Results and Discussion}
+Using an alignment time of 2 minutes, the above mechanization module is applied to the static IMU data provided. Figure \ref{fig:position} shows the position of the IMU over time as computed by the mechanization module.  From these plots, it is clear that the position of the IMU drifts with time and the resulting error more than linear.  This is expected as the errors in position arise due to the uncertainty and drift in the sensor biases and scale factors, and random noise in the sensor measurements.  Since uncompensated biases and scale factors lead to superlinear position errors, the accelerating deviation from the initial position is not unexpected.
+
+Figures \ref{fig:position-errors}, \ref{fig:velocity-errors}, and \ref{fig:attitude-errors}, respectively, show the errors in position in the LLF, errors in velocity in the LLF, and attitude errors.  These plots show the same superlinear drift in the position and velocity of the IMU.  The erratic errors in the Euler angles are indicative of the angle random walk caused by random noise in the gyroscope measurements.  The errors in roll and azimuth appear to be roughly a pure random walk, indicating that the bias in these gyroscope axes was adequately compensated.  However, we see a clear bias in the random walk of the pitch, so there was likely some uncompensated bias affecting the x-gyroscope.
+
+A solution to improve the navigation accuracy is to augment the INS provided navigation parameters with those from other sensors using a Kalman filtering approach.  For example, one could incorporate position and velocity information obtained from GPS or attitude information from a magnetometer to reduce the errors.  Furthermore, CUPT can be applied at regular intervals to bound the position error, or ZUPT can be used to bound the velocity errors and reduce the growth rate of position errors.
+
+\begin{figure}[!htbp]
+\centerline{\includegraphics[width=16cm]{img/position.png}}
+\caption{\label{fig:position} Latitude, longitude, and height above the ellipsoid of the IMU as computed by the mechanization module.}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centerline{\includegraphics[width=16cm]{img/position_errors.png}}
+\caption{\label{fig:position-errors} Position errors of the IMU in the initial local level frame.}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centerline{\includegraphics[width=16cm]{img/velocity_errors.png}}
+\caption{\label{fig:velocity-errors} Velocity errors of the IMU in the local level frame.}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centerline{\includegraphics[width=16cm]{img/attitude_errors.png}}
+\caption{\label{fig:attitude-errors} Attitude errors of the IMU.}
+\end{figure}
 
 
 \section{References}
 
 \begin{small}
 
-%\noindent \hangindent=0.5cm [1] A. Angrisano, ``GNSS/INS Integration Methods'', Ph.D. dissertation, Dept. Appl. Sci., University of Naples Parthenope, Naples, IT, 2010.
-
-%\noindent \hangindent=0.5cm [2] Y. Yang, ``Tightly Coupled MEMS INS/GPS Integration with INS Aided Receiver Tracking Loops'', Ph.D. dissertation, Dept. Geo. Eng., University of Calgary, Calgary, AB, 2008.
+\hangindent=0.48cm [1] Naser El-Sheimy. Lecture Notes for ENGO 623 - Inertial Surveying and INS/GPS Integration. University of Calgary. Winter 2023.
 
 \end{small}
 

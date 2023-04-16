@@ -26,7 +26,7 @@ class INSMechanization:
         gyro_sf: float | np.ndarray = 0.0,  # gyro scale factor matrix
         accel_no: np.ndarray = np.zeros((3, 3)),  # accel non-orthogonality
         gyro_no: np.ndarray = np.zeros((3, 3)),  # gyro non-orthogonality
-        alignment_time: float = 0,  # alignment time in seconds
+        alignment_time: float = 120,  # alignment time in seconds
     ) -> None:
         self.h: float = h0
         self.lat: float = lat0
@@ -407,7 +407,7 @@ def plot_results(
         import matplotlib.pyplot as plt
         from matplotlib.ticker import ScalarFormatter, AutoMinorLocator
 
-    plt.figure(figsize=(11, 9))
+    plt.figure(figsize=(10, 11))
     for i in range(3):
         # Plot the results
         plt.subplot(3, 1, i + 1)
@@ -433,6 +433,7 @@ def plot_results(
         # Format the y-axis tick labels to remove the constant
         ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False, useMathText=True))
     plt.tight_layout()
+    plt.subplots_adjust(hspace=0.25)
     if save:
         plt.savefig(title, dpi=300)
     else:
@@ -547,10 +548,10 @@ def main(save_plots: bool = False, save_results_csv: bool = False) -> None:
         (r'$\delta r$ (deg)', r'$\delta p$ (deg)', r'$\delta A$ (deg)'),
         ((-0.008, 0.004), (0, 0.06), (-0.02, 0)),
         (7, 7, 6),
-        'img/attitude_erros.png',
+        'img/attitude_errors.png',
         save_plots,
     )
 
 
 if __name__ == '__main__':
-    main()
+    main(save_plots=True, save_results_csv=True)
